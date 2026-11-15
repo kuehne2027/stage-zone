@@ -198,7 +198,7 @@ let openAddr=new Set();let batch=0,tab='stage',openCard=null;
 /* ---------- utilidades ---------- */
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const nh=v=>String(v||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-function normId(v){v=String(v||'').trim();let m=v.match(/^\D*(\d{8,})\s*\{/);if(m)v=m[1];m=v.match(/"id"\s*:\s*"?(\d{8,})/);if(m&&!/^\d/.test(v))return m[1];let d=v.replace(/\D/g,'');if(d.length>15&&d.length%2===0&&d.slice(0,d.length/2)===d.slice(d.length/2))d=d.slice(0,d.length/2);return d.length>=8&&d.length<=15?d:''}
+function normId(v){v=String(v||'').trim();if(/"name"\s*:/.test(v)||/^\W*SR\d*-\d/i.test(v))return '';{let k=v.match(/^\D*(\d{8,15})\s*SR\d*-\d/i);if(k)return k[1]}let m=v.match(/^\D*(\d{8,})\s*\{/);if(m)v=m[1];m=v.match(/"id"\s*:\s*"?(\d{8,})/);if(m&&!/^\d/.test(v))return m[1];let d=v.replace(/\D/g,'');if(d.length>15&&d.length%2===0&&d.slice(0,d.length/2)===d.slice(d.length/2))d=d.slice(0,d.length/2);return d.length>=8&&d.length<=15?d:''}
 function normCage(v){v=String(v||'');let m=v.match(/"name"\s*:\s*"([^"]+)"/);let c=(m?m[1]:v).toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-+|-+$/g,'');if(/^SR/.test(c))c=c.replace(/[A-Z]+$/,'').replace(/-+$/,'');return /^SR\d+-\d+-\d+-\d{1,3}$/.test(c)||/^\d{1,2}-\d{1,2}-\d{1,3}$/.test(c)?c:''}
 function dateKey(s){s=String(s||'').trim();let m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);return m?m[0]:''}
 const fmtDate=k=>k==='*'?'todos os dias':k?k.split('-').reverse().join('/'):'';
