@@ -85,7 +85,7 @@ button:focus-visible,.file-button:focus-visible,input:focus-visible{outline:2px 
 </div>
 
 <div class="tabs">
-  <button data-tab="stage" class="active">▥ Pacotes por endereço</button>
+  <button data-tab="stage" class="active">▥ Faltantes por endereço</button>
   <button data-tab="cards">⚑ Faltantes por gaiola</button>
   <button data-tab="ids">☷ Faltantes (lista)</button>
   <button data-tab="nao">⚠ Não localizados</button>
@@ -273,7 +273,7 @@ function render(){
  // consulta rápida por ID
  let lk='';if(/^\d{8,}$/.test(q)){let p=place.get(q);lk=p?`<div class="lk">Pacote <b>${esc(q)}</b> está na gaiola <b>${esc(p.g)}</b> — bipado ${esc(hora(p.ts))}${falt.has(q)?' · está na lista de faltantes':''}</div>`:`<div class="lk">Pacote <b>${esc(q)}</b> não foi bipado na Stage Zone ${curDate?'em '+fmtDate(curDate):''}.</div>`}
  $('lookup').innerHTML=lk;
- const T={cards:['Faltantes por gaiola','Cada card = uma gaiola com faltantes dentro. Clique para ver os IDs.'],stage:['Pacotes por endereço','Quantidade de IDs bipados em cada endereço SR. Clique no card para ir à lista de IDs dele.'],ids:['Faltantes localizados','ID, rota e gaiola onde foi bipado'],nao:['Não localizados','Faltantes sem bipagem na Stage Zone no dia']}[tab];
+ const T={cards:['Faltantes por gaiola','Cada card = uma gaiola com faltantes dentro. Clique para ver os IDs.'],stage:['Faltantes por endereço','Só os IDs que ainda estão nos faltantes. O endereço some quando todos forem encontrados. Clique no card para ver os IDs.'],ids:['Faltantes localizados','ID, rota e gaiola onde foi bipado'],nao:['Não localizados','Faltantes sem bipagem na Stage Zone no dia']}[tab];
  $('title').textContent=T[0];$('subtitle').textContent=T[1];
  let h='';
  const match=(c)=>!q||nh(c.g).replace(/\s/g,'').includes(q)||c.ids.some(i=>i.includes(q))||(c.routes&&[...c.routes.keys()].some(r=>nh(r).includes(q)));
@@ -282,15 +282,15 @@ function render(){
   else if(!falt.size)h=`<div class="empty">Stage Zone carregada (${place.size.toLocaleString('pt-BR')} pacotes em ${stageCages().length} gaiolas).<br>Agora suba ou cole os faltantes — os cards aparecem na hora.</div>`;
   else{let list=A.cages.filter(match);h='<div class="cards">'+(list.length?list.map(c=>card(c,true)).join(''):'<div class="empty" style="grid-column:1/-1">Nenhum faltante encontrado em gaiola.</div>')+'</div>'}
  }else if(tab==='stage'){
-  const fc=c=>c.ids.reduce((a,i)=>a+(falt.has(i)?1:0),0);
-  let list=stageCages().filter(match).map(c=>({...c,nf:fc(c)}));
+  // só os IDs que estão na lista de faltantes; endereço sem faltante some da tela
+  let list=stageCages().map(c=>({...c,ids:c.ids.filter(i=>falt.has(i))})).filter(c=>c.ids.length).filter(match).map(c=>({...c,nf:c.ids.length}));
   list.sort((a,b)=>(b.nf>0)-(a.nf>0)||b.nf-a.nf||a.g.localeCompare(b.g,'pt',{numeric:true}));
-  if(!list.length)h=`<div class="empty">${place.size?'Nada encontrado.':'Importe a planilha da Stage Zone.'}</div>`;
+  if(!list.length)h=`<div class="empty">${!place.size?'Importe a planilha da Stage Zone.':!falt.size?'Suba o arquivo de faltantes para ver os endereços.':q?'Nada encontrado.':'✓ Nenhum faltante nas gaiolas — tudo encontrado!'}</div>`;
   else{
-   h='<div class="cards">'+list.map(c=>`<button type="button" class="card stg addr${c.nf?' hasf':''}" data-go="a-${esc(c.g)}">${c.nf?`<span class="fbadge" title="faltantes neste endereço">${c.nf}</span>`:''}<div class="g">ENDEREÇO</div><div class="gn">${esc(c.g)}</div><div class="q">${c.ids.length}<small>pacote${c.ids.length>1?'s':''}</small></div></button>`).join('')+'</div>';
-   h+=`<div class="sech"><h3 class="sec">IDs por endereço <small>${list.length} endereços · ${list.reduce((a,c)=>a+c.ids.length,0).toLocaleString('pt-BR')} pacotes${curDate?' · '+fmtDate(curDate):''}</small></h3><span><button type="button" class="mini" id="openAll">▾ Abrir todos</button><button type="button" class="mini" id="closeAll">▸ Fechar todos</button></span></div>`;
+   h='<div class="cards">'+list.map(c=>`<button type="button" class="card stg addr${c.nf?' hasf':''}" data-go="a-${esc(c.g)}"><div class="g">ENDEREÇO</div><div class="gn">${esc(c.g)}</div><div class="q">${c.ids.length}<small>faltante${c.ids.length>1?'s':''}</small></div></button>`).join('')+'</div>';
+   h+=`<div class="sech"><h3 class="sec">IDs por endereço <small>${list.length} endereços · ${list.reduce((a,c)=>a+c.ids.length,0).toLocaleString('pt-BR')} faltantes${curDate?' · '+fmtDate(curDate):''}</small></h3><span><button type="button" class="mini" id="openAll">▾ Abrir todos</button><button type="button" class="mini" id="closeAll">▸ Fechar todos</button></span></div>`;
    h+=list.map(c=>{const hit=q&&/^\d{4,}$/.test(q)&&c.ids.some(i=>i.includes(q)),op=openAddr.has(c.g)||hit;
-    return `<div class="addrbox${op?' open':''}" id="a-${esc(c.g)}"><button type="button" class="addrh" data-tg="${esc(c.g)}"><span class="arr">${op?'▾':'▸'}</span><b>${esc(c.g)}</b><span class="n">${c.ids.length} pacote${c.ids.length>1?'s':''}</span></button>${op?`<div class="idl">${c.ids.map((i,n)=>`<span class="${falt.has(i)?'f':''}${q&&i.includes(q)?' hit':''}" title="bipado ${esc(hora(place.get(i).ts))}"><em>${n+1}.</em> ${esc(i)}</span>`).join('')}</div>`:''}</div>`}).join('');
+    return `<div class="addrbox${op?' open':''}" id="a-${esc(c.g)}"><button type="button" class="addrh" data-tg="${esc(c.g)}"><span class="arr">${op?'▾':'▸'}</span><b>${esc(c.g)}</b><span class="n">${c.ids.length} faltante${c.ids.length>1?'s':''}</span></button>${op?`<div class="idl">${c.ids.map((i,n)=>`<span class="${falt.has(i)?'f':''}${q&&i.includes(q)?' hit':''}" title="bipado ${esc(hora(place.get(i).ts))}"><em>${n+1}.</em> ${esc(i)}</span>`).join('')}</div>`:''}</div>`}).join('');
   }
  }else{
   let rows=(tab==='ids'?A.found:A.miss).filter(x=>!q||x.id.includes(q)||nh(x.route).includes(q)||nh(x.g||'').replace(/\s/g,'').includes(q));
