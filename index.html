@@ -192,8 +192,7 @@ let reads=[];          // {date,ts,id,g}
 let dates=[];
 let curDate='';
 let place=new Map();   // id -> {g,ts}  (última bipagem do dia)
-let falt=new Map();let resolv=new Set(); // IDs que eram faltantes e saíram da lista → já saíram da gaiola
-    // id -> {route,batch}
+let falt=new Map();    // id -> {route,batch}
 let openAddr=new Set();let batch=0,tab='stage',openCard=null;
 
 /* ---------- utilidades ---------- */
@@ -232,8 +231,7 @@ function loadStage(rows){
 
 function buildPlace(){
  place=new Map();
- for(const r of reads)if(!curDate||curDate==='*'||r.date===curDate)place.set(r.id,{g:r.g,ts:r.ts});
- for(const id of resolv)if(!falt.has(id))place.delete(id); // pacote resolvido não conta mais no endereço // linhas em ordem → fica a última bipagem
+ for(const r of reads)if(!curDate||curDate==='*'||r.date===curDate)place.set(r.id,{g:r.g,ts:r.ts}); // linhas em ordem → fica a última bipagem
 }
 
 /* ---------- Faltantes ---------- */
@@ -252,7 +250,7 @@ function addFaltRows(rows,origem){
   falt.set(id,{route:route||'',batch});novos++}
  saveFalt();
  return {novos,rep,origem}}
-function saveFalt(){try{localStorage.setItem(LS+'_falt',JSON.stringify({b:batch,f:[...falt],r:[...resolv]}))}catch(e){}}
+function saveFalt(){try{localStorage.setItem(LS+'_falt',JSON.stringify({b:batch,f:[...falt]}))}catch(e){}}
 
 /* ---------- análise ---------- */
 function analyse(){
@@ -350,8 +348,7 @@ async function onFalt(files){if(!files||!files.length)return;let msg=[];
  const antes=falt,bAntes=batch;falt=new Map();batch=0;
  for(const f of files){try{let r=addFaltRows(await readRows(f),f.name);msg.push(`${f.name}: ${r.novos} faltantes`)}catch(e){falt=antes;batch=bAntes;saveFalt();note('⚠ Erro ao ler '+f.name+': '+e.message+' — lista anterior mantida.','err');return}}
  let sairam=0;antes.forEach((v,id)=>{if(!falt.has(id))sairam++});let entraram=0;falt.forEach((v,id)=>{if(!antes.has(id))entraram++});
- antes.forEach((v,id)=>{if(!falt.has(id))resolv.add(id)});falt.forEach((v,id)=>resolv.delete(id));
- if(antes.size)msg.push(`${sairam} saíram da lista · ${entraram} novos`);saveFalt();buildPlace();
+ if(antes.size)msg.push(`${sairam} saíram da lista · ${entraram} novos`);saveFalt();
  $('faltDrop').classList.add('done');$('faltStatus').textContent='✓ '+falt.size.toLocaleString('pt-BR')+' faltantes (último envio)';
  syncTabs();render();note(msg.join(' · ')+(place.size?'':' — importe a Stage Zone para ver as gaiolas.'),'ok')}
 function syncTabs(){document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab))}
@@ -359,9 +356,9 @@ function syncTabs(){document.querySelectorAll('[data-tab]').forEach(b=>b.classLi
 $('stageFile').onchange=e=>{onStage(e.target.files[0]);e.target.value=''};
 $('faltFile').onchange=e=>{onFalt([...e.target.files]);e.target.value=''};
 $('dateSel').onchange=e=>setDate(e.target.value);
-$('clearFalt').onclick=()=>{if(!falt.size||!confirm('Apagar todos os faltantes subidos neste ciclo?'))return;falt=new Map();resolv=new Set();batch=0;saveFalt();buildPlace();faltIdle();render();note('Faltantes zerados.')};
+$('clearFalt').onclick=()=>{if(!falt.size||!confirm('Apagar todos os faltantes subidos neste ciclo?'))return;falt=new Map();batch=0;saveFalt();faltIdle();render();note('Faltantes zerados.')};
 $('clearAll').onclick=()=>{if((place.size||falt.size)&&!confirm('Limpar tudo? Apaga a Stage Zone carregada e todos os faltantes.'))return;
- reads=[];dates=[];curDate='';place=new Map();falt=new Map();resolv=new Set();batch=0;openCard=null;$('search').value='';
+ reads=[];dates=[];curDate='';place=new Map();falt=new Map();batch=0;openCard=null;$('search').value='';
  try{[LS+'_stage',LS+'_meta',LS+'_falt',LS+'_place'].forEach(k=>localStorage.removeItem(k))}catch(e){}
  stageIdle();faltIdle();tab='stage';syncTabs();render();note('Tudo limpo. Importe a planilha da Stage Zone.')};
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;openCard=null;syncTabs();render()});
@@ -374,7 +371,7 @@ function applyStage(m,txt,fonte){dates=m.dates;reads=txt.split('\n').filter(Bool
  $('stageStatus').textContent='✓ '+reads.length.toLocaleString('pt-BR')+' pacotes de '+fmtDate(d)+' — '+fonte;$('stageDrop').classList.add('done');
  $('stageInfo').textContent=m.bad?m.bad+' leituras com QR inválido foram ignoradas':'Todas as leituras são válidas'}
 try{localStorage.removeItem(LS+'_place')}catch(e){}
-try{let f=JSON.parse(localStorage.getItem(LS+'_falt')||'null');if(f){falt=new Map(f.f);batch=f.b||0;resolv=new Set(f.r||[]);if(falt.size){$('faltDrop').classList.add('done');$('faltStatus').textContent='✓ '+falt.size+' faltantes (último envio)'}}}catch(e){}
+try{let f=JSON.parse(localStorage.getItem(LS+'_falt')||'null');if(f){falt=new Map(f.f);batch=f.b||0;if(falt.size){$('faltDrop').classList.add('done');$('faltStatus').textContent='✓ '+falt.size+' faltantes (último envio)'}}}catch(e){}
 try{let m=JSON.parse(localStorage.getItem(LS+'_meta')||'null'),txt=localStorage.getItem(LS+'_stage');if(m&&txt&&m.dates&&m.dates.length===1)applyStage(m,txt,m.name)}catch(e){}
 
 /* ---------- Nuvem (Supabase · projeto operação) ---------- */
