@@ -201,7 +201,7 @@ let reads=[];          // {date,ts,id,g}
 let dates=[];
 let curDate='';
 let place=new Map();   // id -> {g,ts}  (última bipagem do dia)
-let conf=new Map();let hh=new Map(),hhSig=''; // pacotes achados pelo HH (robô do Sheets → nuvem) // endereço -> hora em que foi conferido no físico (falta só passar na esteira)
+let conf=new Map();let hh=new Map(),hhSig=''; // pacotes achados pelo HH (lidos da planilha do robô) // endereço -> hora em que foi conferido no físico (falta só passar na esteira)
 let falt=new Map();let vistos=new Set(); // faltantes que já apareceram em gaiola neste ciclo
     // id -> {route,batch}
 let openAddr=new Set();let batch=0,tab='stage',openCard=null;
@@ -499,11 +499,13 @@ async function cloudLoad(manual){cloudBtn('☁ Buscando…',true);
  catch(e){if(manual||!place.size)note('⚠ Não consegui buscar a Stage Zone da nuvem ('+(e.message==='Failed to fetch'?'sem acesso à internet/Supabase':e.message)+'). Você pode subir o arquivo normalmente.','err')}
  finally{cloudBtn('☁ Nuvem')}}
 $('syncBtn').onclick=()=>cloudLoad(true);
-async function hhLoad(){ // pacotes achados pelo HH (robô do Sheets) — mesma data da Stage Zone carregada
- try{let r=await fetch(SB_URL+'?id=eq.achados&select=data_ref,payload,atualizado_em',{headers:SBH,cache:'no-store'});if(!r.ok)return;
-  let [row]=await r.json(),m=new Map();
-  if(row&&row.payload&&(!curDate||String(row.data_ref)===curDate))String(row.payload).split('\n').forEach(l=>{let[i,g,h]=l.split('\t');if(i)m.set(i,{g,h:h||''})});
-  const sig=[...m.keys()].join(',')+'|'+curDate;if(sig!==hhSig){hhSig=sig;hh=m;render()}}catch(e){}}
+// pacotes achados pelo HH: lidos da planilha "Stage Zone – Robô" (aba Faltantes nas gaiolas)
+const ROBO_SHEET='1Cp4Gm2kx5ebcnz3Q5CpqcAH2OOvAC1cxYCgbuvpIIyU',ROBO_ABA='Faltantes nas gaiolas';
+async function hhLoad(){
+ try{let r=await fetch('https://docs.google.com/spreadsheets/d/'+ROBO_SHEET+'/gviz/tq?tqx=out:csv&headers=1&sheet='+encodeURIComponent(ROBO_ABA)+'&_='+Date.now(),{cache:'no-store'});if(!r.ok)return;
+  let rows=parseCSV(await r.text()),m=new Map();
+  for(const x of rows.slice(1)){const id=normId(x[1]);if(id&&/✅|achado/i.test(x[3]||''))m.set(id,{g:normCage(x[0])||x[0],h:hora(x[4]||'')})}
+  const sig=[...m.keys()].join(',');if(sig!==hhSig){hhSig=sig;hh=m;render()}}catch(e){}}
 setInterval(hhLoad,15000);
 render();
 cloudLoad(false).then(hhLoad);

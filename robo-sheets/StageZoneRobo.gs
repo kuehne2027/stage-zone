@@ -5,7 +5,7 @@
  *   • Bipagem HH        → o AppSheet do HH grava aqui (coluna A = data/hora, B = ID lido)
  *   • Colar Faltantes   → importe aqui o CSV de faltantes baixado do sistema
  *   • Painel            → endereços com faltantes, diminuindo a cada pacote achado
- *   • Faltantes nas gaiolas → lista de cada ID faltante, endereço e situação
+ *   • Faltantes nas gaiolas → lista de cada ID faltante, endereço e situação (o app Stage Zone lê esta aba)
  *   • Stage Zone        → bipagens das gaiolas (puxadas da nuvem do app Stage Zone)
  *
  * Rode pela conta pessoal (megakn2026) — na conta da empresa o Apps Script é bloqueado.
@@ -159,7 +159,6 @@ function robo(forcar) {
     painel_(B, achados);
     lista_(B, achados);
     props.setProperty('ultimaLinha', String(ultima));
-    try { enviarAchados_(B, achados); } catch (e) { console.log('Nuvem: ' + e.message); }
   } finally {
     lock.releaseLock();
   }
@@ -304,30 +303,6 @@ function puxarStage_() {
   const pr = PropertiesService.getDocumentProperties();
   pr.setProperty('dataStage', d); pr.setProperty('dataRef', String(row.data_ref));
   return rows.length;
-}
-
-/* ======================= ENVIO PRO APP (nuvem) ======================= */
-// manda pro app Stage Zone a lista de pacotes achados no HH → o app tira da contagem e marca "gaiola auditada"
-function enviarAchados_(B, achados) {
-  const props = PropertiesService.getDocumentProperties();
-  if (!props.getProperty('dataRef')) { try { puxarStage_(); } catch (e) {} }
-  const linhas = [];
-  achados.forEach((h, id) => {
-    const p = B.stage.get(id);
-    if (!p || !B.falt.has(id)) return;
-    const hr = h instanceof Date ? Utilities.formatDate(h, 'America/Sao_Paulo', 'HH:mm') : (String(h).match(/\d{1,2}:\d{2}/) || [''])[0];
-    linhas.push(id + '\t' + p.g + '\t' + hr);
-  });
-  const payload = linhas.join('\n');
-  const assinatura = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, payload + '|' + props.getProperty('dataRef')));
-  if (assinatura === props.getProperty('ultimoEnvio')) return;   // nada mudou
-  const body = { id: 'achados', data_ref: props.getProperty('dataRef'), origem: 'robo HH (Sheets)', total_leituras: linhas.length, leituras_invalidas: 0, payload: payload, atualizado_em: new Date().toISOString() };
-  const r = UrlFetchApp.fetch(SB_URL + '?on_conflict=id', {
-    method: 'post', contentType: 'application/json', muteHttpExceptions: true, payload: JSON.stringify(body),
-    headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, Prefer: 'resolution=merge-duplicates,return=minimal' }
-  });
-  if (r.getResponseCode() >= 300) throw new Error('HTTP ' + r.getResponseCode() + ' ' + r.getContentText());
-  props.setProperty('ultimoEnvio', assinatura);
 }
 
 /* ======================= UTILITÁRIOS ======================= */
