@@ -64,7 +64,7 @@ button:focus-visible,.file-button:focus-visible,input:focus-visible{outline:2px 
 </section>
 
 <section class="imx">
-  <div class="imx-head"><span class="imx-title">2 · Faltantes do ciclo</span><span id="faltInfo" class="imx-info">cada envio soma aos anteriores</span><button type="button" class="linkbtn" id="clearFalt">limpar só faltantes</button></div>
+  <div class="imx-head"><span class="imx-title">2 · Faltantes do ciclo</span><span id="faltInfo" class="imx-info">cada envio substitui o anterior</span><button type="button" class="linkbtn" id="clearFalt">limpar só faltantes</button></div>
   <div class="imx-row">
     <label class="imx-drop" id="faltDrop" for="faltFile">
       <span class="imx-ic">⇪</span>
@@ -343,8 +343,13 @@ async function onStage(f){if(!f)return;note('Lendo '+f.name+'…');
   note('Stage Zone carregada: mostrando só a última data ('+fmtDate(dates[0])+'). Agora suba os faltantes.','ok')
  }catch(e){note('⚠ Erro ao ler '+f.name+': '+e.message,'err')}}
 async function onFalt(files){if(!files||!files.length)return;let msg=[];
- for(const f of files){try{let r=addFaltRows(await readRows(f),f.name);msg.push(`${f.name}: +${r.novos} novos${r.rep?' ('+r.rep+' já estavam)':''}`)}catch(e){note('⚠ Erro ao ler '+f.name+': '+e.message,'err');return}}
- $('faltDrop').classList.add('done');$('faltStatus').textContent='✓ '+falt.size.toLocaleString('pt-BR')+' faltantes acumulados';
+ // cada envio SUBSTITUI a lista anterior (o arquivo do sistema já é a foto atual dos faltantes);
+ // vários arquivos escolhidos juntos no mesmo envio são somados entre si
+ const antes=falt,bAntes=batch;falt=new Map();batch=0;
+ for(const f of files){try{let r=addFaltRows(await readRows(f),f.name);msg.push(`${f.name}: ${r.novos} faltantes`)}catch(e){falt=antes;batch=bAntes;saveFalt();note('⚠ Erro ao ler '+f.name+': '+e.message+' — lista anterior mantida.','err');return}}
+ let sairam=0;antes.forEach((v,id)=>{if(!falt.has(id))sairam++});let entraram=0;falt.forEach((v,id)=>{if(!antes.has(id))entraram++});
+ if(antes.size)msg.push(`${sairam} saíram da lista · ${entraram} novos`);saveFalt();
+ $('faltDrop').classList.add('done');$('faltStatus').textContent='✓ '+falt.size.toLocaleString('pt-BR')+' faltantes (último envio)';
  syncTabs();render();note(msg.join(' · ')+(place.size?'':' — importe a Stage Zone para ver as gaiolas.'),'ok')}
 function syncTabs(){document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab))}
 
@@ -366,7 +371,7 @@ function applyStage(m,txt,fonte){dates=m.dates;reads=txt.split('\n').filter(Bool
  $('stageStatus').textContent='✓ '+reads.length.toLocaleString('pt-BR')+' pacotes de '+fmtDate(d)+' — '+fonte;$('stageDrop').classList.add('done');
  $('stageInfo').textContent=m.bad?m.bad+' leituras com QR inválido foram ignoradas':'Todas as leituras são válidas'}
 try{localStorage.removeItem(LS+'_place')}catch(e){}
-try{let f=JSON.parse(localStorage.getItem(LS+'_falt')||'null');if(f){falt=new Map(f.f);batch=f.b||0;if(falt.size){$('faltDrop').classList.add('done');$('faltStatus').textContent='✓ '+falt.size+' faltantes acumulados'}}}catch(e){}
+try{let f=JSON.parse(localStorage.getItem(LS+'_falt')||'null');if(f){falt=new Map(f.f);batch=f.b||0;if(falt.size){$('faltDrop').classList.add('done');$('faltStatus').textContent='✓ '+falt.size+' faltantes (último envio)'}}}catch(e){}
 try{let m=JSON.parse(localStorage.getItem(LS+'_meta')||'null'),txt=localStorage.getItem(LS+'_stage');if(m&&txt&&m.dates&&m.dates.length===1)applyStage(m,txt,m.name)}catch(e){}
 
 /* ---------- Nuvem (Supabase · projeto operação) ---------- */
