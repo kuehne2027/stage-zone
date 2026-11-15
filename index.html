@@ -337,7 +337,7 @@ const svgI={box:'<path d="m12 2 9 5-9 5-9-5 9-5Z M3 7v10l9 5 9-5V7 M12 12v10 M7.
 const svg=k=>`<svg aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">${svgI[k]}</svg>`;
 function repHTML(L,K){
  const n=v=>Number(v).toLocaleString('pt-BR');
- return `<main class="report" id="report"><header class="header header-kn"><div class="kn-main"><div class="kn-identity"><img alt="Kuehne+Nagel" class="kn-custom-logo" src="${$('szRepLogo').textContent.trim()}"></div><div class="kn-divider"></div><div class="kn-report-title"><div class="kn-overline">CONTROLE OPERACIONAL <span> / </span> SRJ1 CORDOVIL</div><h1>FALTANTES NA STAGE ZONE</h1><p>Localização dos faltantes nas gaiolas (endereços SR)</p></div></div>
+ return `<main class="report" id="report"><header class="header header-kn"><div class="kn-main"><div class="kn-identity"><img alt="Kuehne+Nagel" class="kn-custom-logo" src="${$('szRepLogo').textContent.trim()}"></div><div class="kn-divider"></div><div class="kn-report-title"><div class="kn-overline">CONTROLE OPERACIONAL <span> / </span> SRJ1 CORDOVIL</div><h1>FALTANTES STAGE ZONE</h1><p>Localização dos faltantes nas gaiolas (endereços SR)</p></div></div>
  <div class="kn-strip"><div class="kn-strip-item">${svg('pin')}<span>UNIDADE</span><strong>SRJ1 · CORDOVIL</strong></div><div class="kn-strip-item">${svg('gear')}<span>CICLO OPERACIONAL</span><strong id="showCycle">${esc(K.ciclo)}</strong></div><div class="kn-strip-item">${svg('cal')}<span>DATA DO RELATÓRIO</span><strong id="showDate">${esc(K.data)}</strong></div></div></header>
  <div class="section-intro"><div><h2>${svg('bar')}Visão geral</h2><p>Faltantes bipados na Stage Zone${curDate?' em '+fmtDate(curDate):''} · atualizado às ${esc(K.hora)}</p></div><span class="tag">${svg('bar')} CONTROLE OPERACIONAL</span></div>
  <section class="cards"><div class="card"><div><span>FALTAM PASSAR</span><br><strong>${n(K.falta)}</strong><em>em ${n(L.length)} endereço${L.length===1?'':'s'}</em></div><span class="metric-icon">${svg('box')}</span></div>
@@ -363,7 +363,7 @@ async function copyReport(){const A=analyse();
  const falta=A.found.length,passou=[...vistos].filter(id=>place.has(id)&&!falt.has(id)).length,tot=falta+passou,pct=tot?Math.round(passou/tot*100):0;
  const L=[...A.cages].sort((a,b)=>conf.has(a.g)-conf.has(b.g)),agora=new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
  // texto (WhatsApp)
- let t=`📦 *FALTANTES NA STAGE ZONE*${curDate?' — '+fmtDate(curDate):''}\n🕒 Atualizado ${agora}\n\n`+
+ let t=`📦 *FALTANTES STAGE ZONE*${curDate?' — '+fmtDate(curDate):''}\n🕒 Atualizado ${agora}\n\n`+
   `🔴 Faltam passar: *${falta}* em *${L.length}* endereço${L.length===1?'':'s'}\n✅ Já passaram: *${passou}* (${pct}%)\n\n`+
   (L.length?'*Endereços para buscar:*\n'+L.map(c=>`${conf.has(c.g)?'✅':'▪'} *${c.g}* → ${c.ids.length} faltante${c.ids.length>1?'s':''}${conf.has(c.g)?' _(conferido, falta esteira)_':''}`).join('\n'):'🎉 Todos os faltantes das gaiolas foram encontrados!');
  if(window.__repShift){window.__repShift=false;try{await navigator.clipboard.writeText(t);note('Reporte em texto copiado.','ok')}catch(e){note('A cópia foi bloqueada pelo navegador.','err')}return}
@@ -386,7 +386,7 @@ function reportCanvas(L,K){
  let g=x.createLinearGradient(0,0,W,H);g.addColorStop(0,'#0b2740');g.addColorStop(1,'#061524');x.fillStyle=g;x.fillRect(0,0,W,H);
  // cabeçalho
  x.fillStyle='#22b8de';rr(P,P,8,64,4);x.fill();
- x.fillStyle='#ffffff';x.font=F(800,36);x.fillText('Faltantes na Stage Zone',P+26,P+34);
+ x.fillStyle='#ffffff';x.font=F(800,36);x.fillText('Faltantes Stage Zone',P+26,P+34);
  x.fillStyle='#9cc4d9';x.font=F(500,18);x.fillText('SRJ1 · Kuehne+Nagel'+(curDate?'  ·  bipagens de '+fmtDate(curDate):'')+'  ·  atualizado '+K.agora,P+26,P+64);
  // KPIs
  const ky=P+110,kw=(W-P*2-gap*2)/3,kh=120;
