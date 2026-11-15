@@ -274,9 +274,9 @@ function appTabs_(B, L, K) {
   const cabE = ['Endereço', 'Faltantes', 'Achados', 'Restam', 'Status', 'Rotas', 'Ordem', 'Atualizado'];
   const rowsE = L.map((x, i) => [x.g, x.tot, x.ach, x.rst, x.rst === 0 ? '✅ Auditada' : x.ach ? '🔎 Buscando' : '🔴 A buscar',
     x.rotas.slice(0, 6).join(' · ') + (x.rotas.length > 6 ? ' +' + (x.rotas.length - 6) : ''), i + 1, agora]);
-  e.clearContents();
   e.getRange(1, 1, 1, cabE.length).setValues([cabE]);
   if (rowsE.length) e.getRange(2, 1, rowsE.length, cabE.length).setValues(rowsE);
+  limparSobra_(e, rowsE.length + 1, cabE.length);
 
   // App Reporte — 1 linha só (chave = "atual"), com o texto pronto pro grupo
   const aud = L.filter(x => x.rst === 0), abertos = L.filter(x => x.rst > 0);
@@ -289,7 +289,6 @@ function appTabs_(B, L, K) {
     (aud.length ? '\n\n*Gaiolas auditadas:*\n' + aud.map(x => '🟢 *' + x.g + '* (' + x.ach + ' achado' + (x.ach > 1 ? 's' : '') + ')').join('\n') : '');
   const r = aba_(ABA.APP_REP);
   const cabR = ['Chave', 'Faltam', 'Encontrados', 'Concluído', 'Endereços abertos', 'Auditadas', 'Atualizado', 'Texto'];
-  r.clearContents();
   r.getRange(1, 1, 2, cabR.length).setValues([cabR, ['atual', K.rst, K.ach, K.pct, abertos.length, aud.length, agora, t]]);
   r.getRange(2, 4).setNumberFormat('0%');
 }
@@ -302,7 +301,6 @@ function lista_(B, achados) {
     rows.push([g, id, B.falt.get(id).rota, a ? '✅ Achado' : '🔴 Procurando', a ? (a instanceof Date ? Utilities.formatDate(a, 'America/Sao_Paulo', 'dd/MM HH:mm:ss') : String(a)) : '', B.stage.get(id).h]);
   }));
   rows.sort((x, y) => (x[3] > y[3] ? -1 : x[3] < y[3] ? 1 : 0) || x[0].localeCompare(y[0], 'pt', { numeric: true }));
-  sh.clear();
   const cab = ['ENDEREÇO', 'ID DO PACOTE', 'ROTA', 'SITUAÇÃO', 'ACHADO EM', 'BIPADO NA GAIOLA'];
   sh.getRange(1, 1, 1, 6).setValues([cab]); estiloCab_(sh, 6);
   if (rows.length) {
@@ -310,6 +308,7 @@ function lista_(B, achados) {
     sh.getRange(2, 1, rows.length, 6).setValues(rows)
       .setBackgrounds(rows.map(r => Array(6).fill(r[3].indexOf('✅') === 0 ? COR.verde : '#ffffff')));
   }
+  limparSobra_(sh, rows.length + 1, 6);
   sh.setFrozenRows(1); sh.setColumnWidths(1, 6, 140);
 }
 
@@ -356,6 +355,11 @@ function normCage_(v) {
   let c = (m ? m[1] : v).toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   if (/^SR/.test(c)) c = c.replace(/[A-Z]+$/, '').replace(/-+$/, '');
   return /^SR\d+-\d+-\d+-\d{1,3}$/.test(c) ? c : '';
+}
+// apaga só as linhas que sobraram embaixo (em vez de limpar a aba inteira antes de escrever)
+function limparSobra_(sh, ultimaUsada, ncol) {
+  const fim = sh.getLastRow();
+  if (fim > ultimaUsada) sh.getRange(ultimaUsada + 1, 1, fim - ultimaUsada, Math.max(ncol, sh.getLastColumn())).clearContent().setBackground(null);
 }
 function aba_(nome) {
   const ss = SpreadsheetApp.getActive();
