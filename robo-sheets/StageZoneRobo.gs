@@ -7,6 +7,8 @@
  *   • Painel            → endereços com faltantes, diminuindo a cada pacote achado
  *   • Faltantes nas gaiolas → lista de cada ID faltante, endereço e situação (o app Stage Zone lê esta aba)
  *   • Stage Zone        → bipagens das gaiolas (puxadas da nuvem do app Stage Zone)
+ *   • App Endereços     → tabela do AppSheet: endereço, faltantes, achados, restam, status
+ *   • App Reporte       → tabela do AppSheet: números do topo + texto pronto pro WhatsApp
  *
  * Rode pela conta pessoal (megakn2026) — na conta da empresa o Apps Script é bloqueado.
  ******************************************************************/
@@ -19,7 +21,9 @@ const ABA = {
   COLAR: 'Colar Faltantes',
   PAINEL: 'Painel',
   LISTA: 'Faltantes nas gaiolas',
-  STAGE: 'Stage Zone'
+  STAGE: 'Stage Zone',
+  APP_END: 'App Endereços',
+  APP_REP: 'App Reporte'
 };
 const BIP_CAB = ['Data/Hora', 'ID lido', 'Resultado', 'Endereço', 'Restam no endereço', 'Rota'];
 const COR = { azul: '#0b2944', azul2: '#123b5c', verde: '#d9f7e8', verdeT: '#0a7a4b', vermelho: '#ffe1e5', vermelhoT: '#c4122f', amarelo: '#fff4cc', cinza: '#eef2f6' };
@@ -52,7 +56,7 @@ function instalar() {
   if (col.getLastRow() === 0) {
     col.getRange(1, 1).setValue('Importe aqui o CSV de faltantes: Arquivo › Importar › Fazer upload › "Substituir página atual" (com esta aba aberta).');
   }
-  aba_(ABA.PAINEL); aba_(ABA.LISTA); aba_(ABA.STAGE);
+  aba_(ABA.PAINEL); aba_(ABA.LISTA); aba_(ABA.STAGE); aba_(ABA.APP_END); aba_(ABA.APP_REP);
 
   // gatilhos: a cada 1 minuto (pega o que o AppSheet gravou) + quando alguém mexe na planilha
   pausar(true);
@@ -245,7 +249,7 @@ function painel_(B, achados) {
   sh.getRange(7, 1, 1, 6).setValues([cab]);
   estiloCab_(sh, 6, 7);
   if (L.length) {
-    const rows = L.map(x => [x.g, x.tot, x.ach, x.rst, x.rst === 0 ? '✅ Concluído' : x.ach ? '🔎 Buscando' : '🔴 A buscar', x.rotas.slice(0, 6).join(' · ') + (x.rotas.length > 6 ? ' +' + (x.rotas.length - 6) : '')]);
+    const rows = L.map(x => [x.g, x.tot, x.ach, x.rst, x.rst === 0 ? '✅ Auditada' : x.ach ? '🔎 Buscando' : '🔴 A buscar', x.rotas.slice(0, 6).join(' · ') + (x.rotas.length > 6 ? ' +' + (x.rotas.length - 6) : '')]);
     const rg = sh.getRange(8, 1, rows.length, 6);
     rg.setValues(rows).setVerticalAlignment('middle');
     rg.setBackgrounds(L.map(x => Array(6).fill(x.rst === 0 ? COR.verde : x.ach ? COR.amarelo : '#ffffff')));
@@ -259,6 +263,35 @@ function painel_(B, achados) {
   }
   sh.setColumnWidth(1, 150); sh.setColumnWidths(2, 3, 105); sh.setColumnWidth(5, 130); sh.setColumnWidth(6, 260);
   sh.setFrozenRows(7);
+  appTabs_(B, L, { tot, ach, rst, abertos, pct });
+}
+
+/* ======================= TABELAS DO APPSHEET ======================= */
+function appTabs_(B, L, K) {
+  const agora = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM HH:mm');
+  // App Endereços — 1 linha por endereço (cabeçalho na linha 1, chave = Endereço)
+  const e = aba_(ABA.APP_END);
+  const cabE = ['Endereço', 'Faltantes', 'Achados', 'Restam', 'Status', 'Rotas', 'Ordem', 'Atualizado'];
+  const rowsE = L.map((x, i) => [x.g, x.tot, x.ach, x.rst, x.rst === 0 ? '✅ Auditada' : x.ach ? '🔎 Buscando' : '🔴 A buscar',
+    x.rotas.slice(0, 6).join(' · ') + (x.rotas.length > 6 ? ' +' + (x.rotas.length - 6) : ''), i + 1, agora]);
+  e.clearContents();
+  e.getRange(1, 1, 1, cabE.length).setValues([cabE]);
+  if (rowsE.length) e.getRange(2, 1, rowsE.length, cabE.length).setValues(rowsE);
+
+  // App Reporte — 1 linha só (chave = "atual"), com o texto pronto pro grupo
+  const aud = L.filter(x => x.rst === 0), abertos = L.filter(x => x.rst > 0);
+  let t = '📦 *FALTANTES STAGE ZONE*' + (B.dataStage ? ' — ' + B.dataStage : '') + '\n🕒 Atualizado ' + agora + '\n\n' +
+    '🔴 Faltam passar: *' + K.rst + '* em *' + abertos.length + '* endereço' + (abertos.length === 1 ? '' : 's') + '\n' +
+    '✅ Encontrados no HH: *' + K.ach + '* (' + Math.round(K.pct * 100) + '%)\n' +
+    (aud.length ? '🟢 Gaiolas auditadas: *' + aud.length + '*\n' : '') + '\n' +
+    (abertos.length ? '*Endereços para buscar:*\n' + abertos.map(x => '▪ *' + x.g + '* → ' + x.rst + ' faltante' + (x.rst > 1 ? 's' : '') + (x.ach ? ' _(' + x.ach + ' já achado' + (x.ach > 1 ? 's' : '') + ')_' : '')).join('\n')
+      : '🎉 Todos os faltantes das gaiolas foram encontrados!') +
+    (aud.length ? '\n\n*Gaiolas auditadas:*\n' + aud.map(x => '🟢 *' + x.g + '* (' + x.ach + ' achado' + (x.ach > 1 ? 's' : '') + ')').join('\n') : '');
+  const r = aba_(ABA.APP_REP);
+  const cabR = ['Chave', 'Faltam', 'Encontrados', 'Concluído', 'Endereços abertos', 'Auditadas', 'Atualizado', 'Texto'];
+  r.clearContents();
+  r.getRange(1, 1, 2, cabR.length).setValues([cabR, ['atual', K.rst, K.ach, K.pct, abertos.length, aud.length, agora, t]]);
+  r.getRange(2, 4).setNumberFormat('0%');
 }
 
 function lista_(B, achados) {
