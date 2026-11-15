@@ -319,9 +319,53 @@ function exportCSV(){const A=analyse();let rows;
  else if(tab==='nao')rows=[['ID do pacote','Rota']].concat(A.miss.map(x=>[x.id,x.route]));
  else rows=[['Gaiola','ID do pacote','Rota','Bipado']].concat(A.found.sort((a,b)=>a.g.localeCompare(b.g,'pt',{numeric:true})).map(x=>[x.g,x.id,x.route,x.ts]));
  let csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\r\n'),u=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=u;a.download='stage_zone_'+tab+'_'+(curDate||'')+'.csv';a.click();URL.revokeObjectURL(u)}
-async function copyReport(){const A=analyse();if(tab==='stage'){let L=stageCages();let t=`*PACOTES POR ENDEREÇO${curDate?' — '+fmtDate(curDate):''}*\n${L.length} endereços | ${place.size} pacotes\n\n`+L.map(c=>`▪ ${c.g}: ${c.ids.length} pacote${c.ids.length>1?'s':''}`).join('\n');try{await navigator.clipboard.writeText(t);note('Lista de endereços copiada.','ok')}catch(e){note('A cópia foi bloqueada pelo navegador. Use Exportar CSV.','err')}return}
- let t=`*FALTANTES × STAGE ZONE${curDate?' — '+fmtDate(curDate):''}*\nFaltantes: ${falt.size} | Achados em gaiola: ${A.found.length} | Não localizados: ${A.miss.length}\n\n`+A.cages.map(c=>`▪ ${c.g}: ${c.ids.length}`+(c.routes.size?` (${[...c.routes.keys()].join(', ')})`:'')).join('\n');
- try{await navigator.clipboard.writeText(t);note('Reporte copiado — é só colar no WhatsApp.','ok')}catch(e){note('A cópia foi bloqueada pelo navegador. Use Exportar CSV.','err')}}
+async function copyReport(){const A=analyse();
+ if(!falt.size||!place.size){note('Carregue a Stage Zone e os faltantes para gerar o reporte.','err');return}
+ for(const f of A.found)vistos.add(f.id);
+ const falta=A.found.length,passou=[...vistos].filter(id=>place.has(id)&&!falt.has(id)).length,tot=falta+passou,pct=tot?Math.round(passou/tot*100):0;
+ const L=A.cages,agora=new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+ // texto (WhatsApp)
+ let t=`📦 *FALTANTES NA STAGE ZONE*${curDate?' — '+fmtDate(curDate):''}\n🕒 Atualizado ${agora}\n\n`+
+  `🔴 Faltam passar: *${falta}* em *${L.length}* endereço${L.length===1?'':'s'}\n✅ Já passaram: *${passou}* (${pct}%)\n\n`+
+  (L.length?'*Endereços para buscar:*\n'+L.map(c=>`▪ *${c.g}* → ${c.ids.length} faltante${c.ids.length>1?'s':''}`).join('\n'):'🎉 Todos os faltantes das gaiolas foram encontrados!');
+ // imagem
+ const cv=reportCanvas(L,{falta,passou,pct,agora});
+ try{const blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+  await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+  note('Imagem do reporte copiada — cole no WhatsApp (Ctrl+V). Clique de novo segurando Shift para copiar em texto.','ok');
+  if(window.__repShift){await navigator.clipboard.writeText(t);note('Reporte em texto copiado.','ok')}
+ }catch(e){try{await navigator.clipboard.writeText(t);note('Não deu para copiar a imagem; o reporte foi copiado em texto.','ok')}catch(_){let a=document.createElement('a');a.href=cv.toDataURL('image/png');a.download='faltantes-stage-zone.png';a.click();note('Imagem baixada.','ok')}}
+ window.__repShift=false}
+function reportCanvas(L,K){
+ const W=1080,P=48,cols=4,gap=16,cw=(W-P*2-gap*(cols-1))/cols,ch=118,rows=Math.max(1,Math.ceil(L.length/cols));
+ const H=P+130+150+40+rows*(ch+gap)+60;
+ const c=document.createElement('canvas');c.width=W*2;c.height=H*2;const x=c.getContext('2d');x.scale(2,2);
+ const rr=(X,Y,w,h,r)=>{x.beginPath();x.moveTo(X+r,Y);x.arcTo(X+w,Y,X+w,Y+h,r);x.arcTo(X+w,Y+h,X,Y+h,r);x.arcTo(X,Y+h,X,Y,r);x.arcTo(X,Y,X+w,Y,r);x.closePath()};
+ const F=(w,sz)=>`${w} ${sz}px "Segoe UI",Arial,sans-serif`;
+ let g=x.createLinearGradient(0,0,W,H);g.addColorStop(0,'#0b2740');g.addColorStop(1,'#061524');x.fillStyle=g;x.fillRect(0,0,W,H);
+ // cabeçalho
+ x.fillStyle='#22b8de';rr(P,P,8,64,4);x.fill();
+ x.fillStyle='#ffffff';x.font=F(800,36);x.fillText('Faltantes na Stage Zone',P+26,P+34);
+ x.fillStyle='#9cc4d9';x.font=F(500,18);x.fillText('SRJ1 · Kuehne+Nagel'+(curDate?'  ·  bipagens de '+fmtDate(curDate):'')+'  ·  atualizado '+K.agora,P+26,P+64);
+ // KPIs
+ const ky=P+110,kw=(W-P*2-gap*2)/3,kh=120;
+ [['FALTAM PASSAR',K.falta,`em ${L.length} endereço${L.length===1?'':'s'}`,'#ff5a6e'],['JÁ PASSARAM',K.passou,'desde o 1º envio','#5fe0b0'],['CONCLUÍDO',K.pct+'%','',  '#83d3fa']].forEach(([lb,v,sub,col],i)=>{
+  const X=P+i*(kw+gap);x.fillStyle='rgba(255,255,255,.05)';rr(X,ky,kw,kh,18);x.fill();x.strokeStyle='rgba(131,211,250,.25)';x.lineWidth=1;x.stroke();
+  x.fillStyle='#9cc4d9';x.font=F(700,14);x.fillText(lb,X+22,ky+32);
+  x.fillStyle=col;x.font=F(900,46);x.fillText(String(v).replace(/\B(?=(\d{3})+(?!\d))/g,'.'),X+22,ky+84);
+  if(sub){x.fillStyle='#9cc4d9';x.font=F(500,15);x.fillText(sub,X+22,ky+108)}
+  if(i===2){const bw=kw-44;x.fillStyle='rgba(255,255,255,.12)';rr(X+22,ky+98,bw,10,5);x.fill();x.fillStyle=col;rr(X+22,ky+98,Math.max(10,bw*K.pct/100),10,5);x.fill()}});
+ // título da grade
+ const gy=ky+kh+46;x.fillStyle='#e8f6ff';x.font=F(800,20);x.fillText(L.length?'Endereços para buscar':'Tudo encontrado! 🎉',P,gy);
+ L.forEach((cg,i)=>{const X=P+(i%cols)*(cw+gap),Y=gy+18+Math.floor(i/cols)*(ch+gap);
+  let gr=x.createLinearGradient(X,Y,X+cw,Y+ch);gr.addColorStop(0,'#3a1527');gr.addColorStop(1,'#0f2a40');x.fillStyle=gr;rr(X,Y,cw,ch,16);x.fill();x.strokeStyle='rgba(255,90,110,.55)';x.lineWidth=1.2;x.stroke();
+  x.fillStyle='#9cc4d9';x.font=F(700,12);x.fillText('ENDEREÇO',X+18,Y+28);
+  x.fillStyle='#ffffff';x.font=F(800,20);x.fillText(cg.g,X+18,Y+54);
+  x.fillStyle='#ff5a6e';x.font=F(900,40);const n=String(cg.ids.length);x.fillText(n,X+18,Y+100);const nw=x.measureText(n).width;
+  x.fillStyle='#c9dbe6';x.font=F(500,14);x.fillText(cg.ids.length>1?'faltantes':'faltante',X+24+nw,Y+99);
+  if(cg.routes&&cg.routes.size){const rs=[...cg.routes.keys()].map(r=>r.replace(/_AM\d*|_PM\d*|_SD\d*/i,''));x.fillStyle='#83d3fa';x.font=F(600,12);let k=Math.min(3,rs.length),rt;do{rt=rs.slice(0,k).join(' · ')+(rs.length>k?' +'+(rs.length-k):'');k--}while(k>0&&x.measureText(rt).width>cw-120);x.textAlign='right';x.fillText(rt,X+cw-16,Y+28);x.textAlign='left'}});
+ x.fillStyle='#5f8299';x.font=F(500,13);x.fillText('Gerado pelo app Stage Zone',P,H-24);
+ return c}
 
 /* ---------- eventos ---------- */
 function fillDates(){const cnt={};for(const r of reads)cnt[r.date]=(cnt[r.date]||0)+1;
@@ -366,7 +410,7 @@ $('clearAll').onclick=()=>{if((place.size||falt.size)&&!confirm('Limpar tudo? Ap
  try{[LS+'_stage',LS+'_meta',LS+'_falt',LS+'_place'].forEach(k=>localStorage.removeItem(k))}catch(e){}
  stageIdle();faltIdle();tab='stage';syncTabs();render();note('Tudo limpo. Importe a planilha da Stage Zone.')};
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;openCard=null;syncTabs();render()});
-$('search').oninput=render;$('btnCsv').onclick=exportCSV;$('btnCopy').onclick=copyReport;
+$('search').oninput=render;$('btnCsv').onclick=exportCSV;$('btnCopy').onclick=e=>{window.__repShift=e.shiftKey;copyReport()};
 [['stageDrop',f=>onStage(f[0])],['faltDrop',f=>onFalt([...f])]].forEach(([id,fn])=>{const d=$(id);['dragenter','dragover'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add('drag')}));['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('drag')}));d.addEventListener('drop',e=>{if(e.dataTransfer.files.length)fn(e.dataTransfer.files)})});
 
 // restaura a Stage Zone e os faltantes se a página for recarregada
