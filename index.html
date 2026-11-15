@@ -13,6 +13,7 @@
 .card.conf{border-color:#24cf93!important;background:linear-gradient(150deg,#0f3b31,#0a2640 70%)!important}
 .card.conf .q{color:#5fe0b0}
 .card .cf{margin-top:7px;font-size:11px;color:#9fe9cb;font-weight:700}
+.card.aud{border-color:#24cf93!important;background:linear-gradient(150deg,#0f3b31,#0a2640 70%)!important;cursor:default}.card.aud .q{color:#5fe0b0}.card .audtag{position:absolute;top:10px;right:10px;background:#24cf93;color:#062418;font-size:10px;font-weight:900;letter-spacing:.3px;border-radius:20px;padding:4px 9px}.card .hhf{margin-top:6px;font-size:11px;color:#9fe9cb;font-weight:800}
 .card .chk.bot{position:static;display:inline-block;margin-top:9px}
 .cfb{font-style:normal;font-size:11px;font-weight:800;color:#24cf93;margin-left:8px}
 </style><style>
@@ -87,7 +88,7 @@ button:focus-visible,.file-button:focus-visible,input:focus-visible{outline:2px 
 
 <div class="stats">
   <div class="stat"><span class="stat-icon">▣</span><small>Faltam passar</small><b id="sBip">0</b><em id="sGai">0 endereços</em></div>
-  <div class="stat"><span class="stat-icon">⚑</span><small>Já passaram</small><b id="sFal">0</b><em id="sLast">desde o 1º envio</em></div>
+  <div class="stat"><span class="stat-icon">⚑</span><small>Encontrados</small><b id="sFal">0</b><em id="sLast">desde o 1º envio</em></div>
   <div class="stat"><span class="stat-icon">✓</span><small>Concluído</small><b id="sAch">0%</b><em id="sRate">—</em></div>
   <div class="stat"><span class="stat-icon">⚠</span><small>Endereços com faltante</small><b id="sNao">0</b><em id="sNaoE">gaiolas para visitar</em></div>
 </div>
@@ -200,7 +201,7 @@ let reads=[];          // {date,ts,id,g}
 let dates=[];
 let curDate='';
 let place=new Map();   // id -> {g,ts}  (última bipagem do dia)
-let conf=new Map(); // endereço -> hora em que foi conferido no físico (falta só passar na esteira)
+let conf=new Map();let hh=new Map(),hhSig=''; // pacotes achados pelo HH (robô do Sheets → nuvem) // endereço -> hora em que foi conferido no físico (falta só passar na esteira)
 let falt=new Map();let vistos=new Set(); // faltantes que já apareceram em gaiola neste ciclo
     // id -> {route,batch}
 let openAddr=new Set();let batch=0,tab='stage',openCard=null;
@@ -265,9 +266,13 @@ function saveFalt(){try{localStorage.setItem(LS+'_falt',JSON.stringify({b:batch,
 
 /* ---------- análise ---------- */
 function analyse(){
- let cages=new Map(),found=[],miss=[];
- for(const [id,f] of falt){let p=place.get(id);if(p){found.push({id,...f,g:p.g,ts:p.ts});let c=cages.get(p.g)||{g:p.g,ids:[],routes:new Map(),novos:0};c.ids.push(id);if(f.route)c.routes.set(f.route,(c.routes.get(f.route)||0)+1);if(f.batch===batch)c.novos++;cages.set(p.g,c)}else miss.push({id,...f})}
- return {cages:[...cages.values()].sort((a,b)=>b.ids.length-a.ids.length||a.g.localeCompare(b.g,'pt',{numeric:true})),found,miss}}
+ let cages=new Map(),found=[],achou=[],miss=[];
+ for(const [id,f] of falt){let p=place.get(id);if(p){const h=hh.get(id);let c=cages.get(p.g)||{g:p.g,ids:[],ach:[],routes:new Map(),novos:0};
+  if(h){achou.push({id,...f,g:p.g,ts:p.ts,hh:h.h});c.ach.push(id)}
+  else{found.push({id,...f,g:p.g,ts:p.ts});c.ids.push(id);if(f.route)c.routes.set(f.route,(c.routes.get(f.route)||0)+1);if(f.batch===batch)c.novos++}
+  cages.set(p.g,c)}else miss.push({id,...f})}
+ const all=[...cages.values()],byG=(a,b)=>a.g.localeCompare(b.g,'pt',{numeric:true});
+ return {cages:all.filter(c=>c.ids.length).sort((a,b)=>b.ids.length-a.ids.length||byG(a,b)),aud:all.filter(c=>!c.ids.length).sort(byG),found,achou,miss}}
 function stageCages(){let m=new Map();for(const [id,p] of place){let c=m.get(p.g)||{g:p.g,ids:[]};c.ids.push(id);m.set(p.g,c)}return [...m.values()].sort((a,b)=>a.g.localeCompare(b.g,'pt',{numeric:true}))}
 const cageTotal=g=>{let n=0;for(const p of place.values())if(p.g===g)n++;return n};
 
@@ -275,15 +280,15 @@ const cageTotal=g=>{let n=0;for(const p of place.values())if(p.g===g)n++;return 
 function render(){
  const A=analyse(),q=nh($('search').value).replace(/\s/g,'');
  // só o que está sendo procurado: faltantes que estão em gaiola
- let nv=vistos.size;for(const f of A.found)vistos.add(f.id);if(vistos.size!==nv)saveFalt();
- const falta=A.found.length,passou=[...vistos].filter(id=>place.has(id)&&!falt.has(id)).length,tot=falta+passou;
+ let nv=vistos.size;for(const f of A.found)vistos.add(f.id);for(const f of A.achou)vistos.add(f.id);if(vistos.size!==nv)saveFalt();
+ const falta=A.found.length,enc=A.achou.length,passou=[...vistos].filter(id=>place.has(id)&&!falt.has(id)).length,okT=enc+passou,tot=falta+okT;
  $('sBip').textContent=falta.toLocaleString('pt-BR');
  $('sGai').textContent='em '+A.cages.length+' endereço'+(A.cages.length===1?'':'s');
- $('sFal').textContent=passou.toLocaleString('pt-BR');
- $('sLast').textContent='desde o 1º envio';
- $('sAch').textContent=(tot?Math.round(passou/tot*100):0)+'%';
- $('sRate').textContent=tot?passou.toLocaleString('pt-BR')+' de '+tot.toLocaleString('pt-BR'):'—';
- $('sNao').textContent=A.cages.length.toLocaleString('pt-BR');{const nc=A.cages.filter(c=>conf.has(c.g)).length;$('sNaoE').textContent=nc?nc+' já conferido'+(nc>1?'s':'')+' no físico':'gaiolas para visitar'}
+ $('sFal').textContent=okT.toLocaleString('pt-BR');
+ $('sLast').textContent=enc+' bipado'+(enc===1?'':'s')+' no HH · '+passou+' na esteira';
+ $('sAch').textContent=(tot?Math.round(okT/tot*100):0)+'%';
+ $('sRate').textContent=tot?okT.toLocaleString('pt-BR')+' de '+tot.toLocaleString('pt-BR'):'—';
+ $('sNao').textContent=A.cages.length.toLocaleString('pt-BR');{const nc=A.cages.filter(c=>conf.has(c.g)).length,na=A.aud.length;$('sNaoE').textContent=[na?na+' gaiola'+(na>1?'s':'')+' auditada'+(na>1?'s':''):'',nc?nc+' conferido'+(nc>1?'s':''):''].filter(Boolean).join(' · ')||'gaiolas para visitar'}
  // consulta rápida por ID
  let lk='';if(/^\d{8,}$/.test(q)){let p=place.get(q);lk=p?`<div class="lk">Pacote <b>${esc(q)}</b> está na gaiola <b>${esc(p.g)}</b> — bipado ${esc(hora(p.ts))}${falt.has(q)?' · está na lista de faltantes':''}</div>`:`<div class="lk">Pacote <b>${esc(q)}</b> não foi bipado na Stage Zone ${curDate?'em '+fmtDate(curDate):''}.</div>`}
  $('lookup').innerHTML=lk;
@@ -294,14 +299,15 @@ function render(){
  if(tab==='cards'){
   if(!place.size)h=`<div class="empty">Importe a planilha da Stage Zone para começar.</div>`;
   else if(!falt.size)h=`<div class="empty">Stage Zone carregada (${place.size.toLocaleString('pt-BR')} pacotes em ${stageCages().length} gaiolas).<br>Agora suba ou cole os faltantes — os cards aparecem na hora.</div>`;
-  else{let list=A.cages.filter(match).sort((a,b)=>conf.has(a.g)-conf.has(b.g));h='<div class="cards">'+(list.length?list.map(c=>card(c,true)).join(''):'<div class="empty" style="grid-column:1/-1">Nenhum faltante encontrado em gaiola.</div>')+'</div>'}
+  else{let list=A.cages.filter(match).sort((a,b)=>conf.has(a.g)-conf.has(b.g));h='<div class="cards">'+(list.length||A.aud.length?list.map(c=>card(c,true)).join('')+A.aud.filter(match).map(audCard).join(''):'<div class="empty" style="grid-column:1/-1">Nenhum faltante encontrado em gaiola.</div>')+'</div>'}
  }else if(tab==='stage'){
   // só os IDs que estão na lista de faltantes; endereço sem faltante some da tela
-  let list=stageCages().map(c=>({...c,ids:c.ids.filter(i=>falt.has(i))})).filter(c=>c.ids.length).filter(match).map(c=>({...c,nf:c.ids.length}));
+  let list=stageCages().map(c=>({...c,ids:c.ids.filter(i=>falt.has(i)&&!hh.has(i)),nh:c.ids.filter(i=>falt.has(i)&&hh.has(i)).length})).filter(c=>c.ids.length).filter(match).map(c=>({...c,nf:c.ids.length}));
   list.sort((a,b)=>(conf.has(a.g)-conf.has(b.g))||b.nf-a.nf||a.g.localeCompare(b.g,'pt',{numeric:true}));
-  if(!list.length)h=`<div class="empty">${!place.size?'Importe a planilha da Stage Zone.':!falt.size?'Suba o arquivo de faltantes para ver os endereços.':q?'Nada encontrado.':'✓ Nenhum faltante nas gaiolas — tudo encontrado!'}</div>`;
+  const audS=A.aud.filter(match);
+  if(!list.length&&!audS.length)h=`<div class="empty">${!place.size?'Importe a planilha da Stage Zone.':!falt.size?'Suba o arquivo de faltantes para ver os endereços.':q?'Nada encontrado.':'✓ Nenhum faltante nas gaiolas — tudo encontrado!'}</div>`;
   else{
-   h='<div class="cards">'+list.map(c=>{const ok=conf.has(c.g);return `<div role="button" tabindex="0" class="card stg addr${c.nf?' hasf':''}${ok?' conf':''}" data-go="a-${esc(c.g)}"><span class="chk${ok?' on':''}" data-chk="${esc(c.g)}" title="Marcar que já foi olhado no físico">${ok?'✓ Conferido':'○ Conferir'}</span><div class="g">ENDEREÇO</div><div class="gn">${esc(c.g)}</div><div class="q">${c.ids.length}<small>faltante${c.ids.length>1?'s':''}</small></div>${ok?`<div class="cf">Olhado no físico${conf.get(c.g)?' às '+esc(conf.get(c.g)):''} · falta passar na esteira</div>`:''}</div>`}).join('')+'</div>';
+   h='<div class="cards">'+list.map(c=>{const ok=conf.has(c.g);return `<div role="button" tabindex="0" class="card stg addr${c.nf?' hasf':''}${ok?' conf':''}" data-go="a-${esc(c.g)}"><span class="chk${ok?' on':''}" data-chk="${esc(c.g)}" title="Marcar que já foi olhado no físico">${ok?'✓ Conferido':'○ Conferir'}</span><div class="g">ENDEREÇO</div><div class="gn">${esc(c.g)}</div><div class="q">${c.ids.length}<small>faltante${c.ids.length>1?'s':''}</small></div>${ok?`<div class="cf">Olhado no físico${conf.get(c.g)?' às '+esc(conf.get(c.g)):''} · falta passar na esteira</div>`:''}${c.nh?`<div class="hhf">✓ ${c.nh} achado${c.nh>1?'s':''} no HH</div>`:''}</div>`}).join('')+audS.map(audCard).join('')+'</div>';
    h+=`<div class="sech"><h3 class="sec">IDs por endereço <small>${list.length} endereços · ${list.reduce((a,c)=>a+c.ids.length,0).toLocaleString('pt-BR')} faltantes${curDate?' · '+fmtDate(curDate):''}</small></h3><span><button type="button" class="mini" id="openAll">▾ Abrir todos</button><button type="button" class="mini" id="closeAll">▸ Fechar todos</button></span></div>`;
    h+=list.map(c=>{const hit=q&&/^\d{4,}$/.test(q)&&c.ids.some(i=>i.includes(q)),op=openAddr.has(c.g)||hit;
     return `<div class="addrbox${op?' open':''}" id="a-${esc(c.g)}"><button type="button" class="addrh" data-tg="${esc(c.g)}"><span class="arr">${op?'▾':'▸'}</span><b>${esc(c.g)}</b>${conf.has(c.g)?'<em class="cfb">✓ conferido</em>':''}<span class="n">${c.ids.length} faltante${c.ids.length>1?'s':''}</span></button>${op?`<div class="idl">${c.ids.map((i,n)=>`<span class="${falt.has(i)?'f':''}${q&&i.includes(q)?' hit':''}" title="bipado ${esc(hora(place.get(i).ts))}"><em>${n+1}.</em> ${esc(i)}</span>`).join('')}</div>`:''}</div>`}).join('');
@@ -317,11 +323,13 @@ function render(){
  $('view').querySelectorAll('.card[data-go]').forEach(el=>el.onclick=()=>{openAddr.add(el.dataset.go.slice(2));render();let t=document.getElementById(el.dataset.go);if(t){t.scrollIntoView({behavior:'smooth',block:'start'});t.classList.remove('flash');void t.offsetWidth;t.classList.add('flash')}});
  $('view').querySelectorAll('.card[data-k]').forEach(el=>el.onclick=()=>{openCard=openCard===el.dataset.k?null:el.dataset.k;render()});
 }
+function audCard(c){const n=c.ach.length,hs=c.ach.map(i=>(hh.get(i)||{}).h).filter(Boolean).sort(),u=hs[hs.length-1];
+ return `<div class="card aud"><span class="audtag">✅ AUDITADA</span><div class="g">GAIOLA AUDITADA</div><div class="gn">${esc(c.g)}</div><div class="q">${n}<small>encontrado${n>1?'s':''} no HH</small></div><div class="cf">Todos os faltantes achados${u?' · última bipagem '+esc(u):''}</div></div>`}
 function card(c,isFalt){
  const k=(isFalt?'f:':'s:')+c.g,op=openCard===k,tot=cageTotal(c.g);
  let routes=isFalt?[...c.routes].sort((a,b)=>b[1]-a[1]).map(([r,n])=>`<span>${esc(r)}${n>1?' ×'+n:''}</span>`).join(''):'';
  const ok=isFalt&&conf.has(c.g);
- let html=`<div role="button" tabindex="0" class="card ${isFalt?'':'stg'} ${op?'open':''}${ok?' conf':''}" data-k="${esc(k)}">${isFalt&&c.novos?`<span class="new">+${c.novos} novo${c.novos>1?'s':''}</span>`:''}<div class="g">GAIOLA</div><div class="gn">${esc(c.g)}</div><div class="q">${c.ids.length}<small>${isFalt?'faltante'+(c.ids.length>1?'s':''):'pacote'+(c.ids.length>1?'s':'')}</small></div>${routes?`<div class="r">${routes}</div>`:''}${isFalt?`<div class="of">de ${tot} bipados nessa gaiola</div>`:''}${isFalt?`${ok?`<div class="cf">Olhado no físico${conf.get(c.g)?' às '+esc(conf.get(c.g)):''} · falta passar na esteira</div>`:''}<span class="chk bot${ok?' on':''}" data-chk="${esc(c.g)}">${ok?'✓ Conferido':'○ Marcar como conferido'}</span>`:''}</div>`;
+ let html=`<div role="button" tabindex="0" class="card ${isFalt?'':'stg'} ${op?'open':''}${ok?' conf':''}" data-k="${esc(k)}">${isFalt&&c.novos?`<span class="new">+${c.novos} novo${c.novos>1?'s':''}</span>`:''}<div class="g">GAIOLA</div><div class="gn">${esc(c.g)}</div><div class="q">${c.ids.length}<small>${isFalt?'faltante'+(c.ids.length>1?'s':''):'pacote'+(c.ids.length>1?'s':'')}</small></div>${routes?`<div class="r">${routes}</div>`:''}${isFalt?`<div class="of">de ${tot} bipados nessa gaiola</div>`:''}${isFalt&&c.ach&&c.ach.length?`<div class="hhf">✓ ${c.ach.length} achado${c.ach.length>1?'s':''} no HH</div>`:''}${isFalt?`${ok?`<div class="cf">Olhado no físico${conf.get(c.g)?' às '+esc(conf.get(c.g)):''} · falta passar na esteira</div>`:''}<span class="chk bot${ok?' on':''}" data-chk="${esc(c.g)}">${ok?'✓ Conferido':'○ Marcar como conferido'}</span>`:''}</div>`;
  if(op){html+=`<div class="detail"><h4>${esc(c.g)} — ${c.ids.length} ID${c.ids.length>1?'s':''}</h4><div class="idl">${c.ids.map(i=>`<span class="${!isFalt&&falt.has(i)?'f':''}">${esc(i)}${isFalt&&falt.get(i).route?' · '+esc(falt.get(i).route):''}</span>`).join('')}</div></div>`}
  return html}
 
@@ -340,10 +348,10 @@ function repHTML(L,K){
  return `<main class="report" id="report"><header class="header header-kn"><div class="kn-main"><div class="kn-identity"><img alt="Kuehne+Nagel" class="kn-custom-logo" src="${$('szRepLogo').textContent.trim()}"></div><div class="kn-divider"></div><div class="kn-report-title"><div class="kn-overline">CONTROLE OPERACIONAL <span> / </span> SRJ1 CORDOVIL</div><h1>FALTANTES STAGE ZONE</h1><p>Localização dos faltantes nas gaiolas (endereços SR)</p></div></div>
  <div class="kn-strip"><div class="kn-strip-item">${svg('pin')}<span>UNIDADE</span><strong>SRJ1 · CORDOVIL</strong></div><div class="kn-strip-item">${svg('gear')}<span>CICLO OPERACIONAL</span><strong id="showCycle">${esc(K.ciclo)}</strong></div><div class="kn-strip-item">${svg('cal')}<span>DATA DO RELATÓRIO</span><strong id="showDate">${esc(K.data)}</strong></div></div></header>
  <div class="section-intro"><div><h2>${svg('bar')}Visão geral</h2><p>Faltantes bipados na Stage Zone${curDate?' em '+fmtDate(curDate):''} · atualizado às ${esc(K.hora)}</p></div><span class="tag">${svg('bar')} CONTROLE OPERACIONAL</span></div>
- <section class="cards"><div class="card"><div><span>FALTAM PASSAR</span><br><strong>${n(K.falta)}</strong><em>em ${n(L.length)} endereço${L.length===1?'':'s'}</em></div><span class="metric-icon">${svg('box')}</span></div>
- <div class="card"><div><span>JÁ PASSARAM</span><br><strong>${n(K.passou)}</strong><em>${K.pct}% concluído</em></div><span class="metric-icon">${svg('ok')}</span></div>
- <div class="card"><div><span>ENDEREÇOS COM FALTANTE</span><br><strong>${n(L.length)}</strong><em>${K.nconf?K.nconf+' conferido'+(K.nconf>1?'s':'')+' no físico':'gaiolas para visitar'}</em></div><span class="metric-icon">${svg('pin')}</span></div></section>
- <section class="charts" style="grid-template-columns:1fr"><div class="panel"><h2>Endereços para buscar</h2>${L.length?`<div class="sz-grid">${L.map(c=>{const rs=[...(c.routes||new Map()).keys()].map(r=>r.replace(/_(AM|PM|SD|CPM)\d*$/i,''));const ok=conf.has(c.g);return `<div class="sz-addr${ok?' ok':''}">${ok?'<span class="tg">✓ CONFERIDO · FALTA ESTEIRA</span>':''}<div class="l">ENDEREÇO</div><div class="g">${esc(c.g)}</div><div class="n"><b>${c.ids.length}</b><small>faltante${c.ids.length>1?'s':''}</small></div>${rs.length?`<div class="r">Rotas: ${esc(rs.slice(0,4).join(' · '))}${rs.length>4?' +'+(rs.length-4):''}</div>`:''}</div>`}).join('')}</div>`:'<div class="sz-done">✓ Todos os faltantes das gaiolas foram encontrados</div>'}</div></section></main>`}
+ <section class="cards"><div class="card"><div><span>FALTAM PASSAR</span><br><strong>${n(K.falta)}</strong><em>em ${n(K.nend)} endereço${K.nend===1?'':'s'}</em></div><span class="metric-icon">${svg('box')}</span></div>
+ <div class="card"><div><span>ENCONTRADOS</span><br><strong>${n(K.passou)}</strong><em>${K.pct}% concluído · ${n(K.enc)} no HH</em></div><span class="metric-icon">${svg('ok')}</span></div>
+ <div class="card"><div><span>ENDEREÇOS COM FALTANTE</span><br><strong>${n(K.nend)}</strong><em>${K.naud?n(K.naud)+' gaiola'+(K.naud>1?'s':'')+' auditada'+(K.naud>1?'s':''):K.nconf?K.nconf+' conferido'+(K.nconf>1?'s':'')+' no físico':'gaiolas para visitar'}</em></div><span class="metric-icon">${svg('pin')}</span></div></section>
+ <section class="charts" style="grid-template-columns:1fr"><div class="panel"><h2>Endereços para buscar</h2>${L.length?`<div class="sz-grid">${L.map(c=>{const rs=[...(c.routes||new Map()).keys()].map(r=>r.replace(/_(AM|PM|SD|CPM)\d*$/i,''));const au=!c.ids.length,ok=au||conf.has(c.g);return `<div class="sz-addr${ok?' ok':''}">${au?'<span class="tg">✅ GAIOLA AUDITADA</span>':ok?'<span class="tg">✓ CONFERIDO · FALTA ESTEIRA</span>':''}<div class="l">ENDEREÇO</div><div class="g">${esc(c.g)}</div>${au?`<div class="n"><b>${c.ach.length}</b><small>encontrado${c.ach.length>1?'s':''} no HH</small></div>`:`<div class="n"><b>${c.ids.length}</b><small>faltante${c.ids.length>1?'s':''}</small></div>`}${rs.length?`<div class="r">Rotas: ${esc(rs.slice(0,4).join(' · '))}${rs.length>4?' +'+(rs.length-4):''}</div>`:''}</div>`}).join('')}</div>`:'<div class="sz-done">✓ Todos os faltantes das gaiolas foram encontrados</div>'}</div></section></main>`}
 async function repCanvas(L,K){
  const fr=document.createElement('iframe');fr.style.cssText='position:fixed;left:-20000px;top:0;width:1300px;height:900px;border:0';document.body.appendChild(fr);
  try{
@@ -359,19 +367,19 @@ async function repCanvas(L,K){
  }finally{setTimeout(()=>fr.remove(),0)}}
 async function copyReport(){const A=analyse();
  if(!falt.size||!place.size){note('Carregue a Stage Zone e os faltantes para gerar o reporte.','err');return}
- for(const f of A.found)vistos.add(f.id);
- const falta=A.found.length,passou=[...vistos].filter(id=>place.has(id)&&!falt.has(id)).length,tot=falta+passou,pct=tot?Math.round(passou/tot*100):0;
- const L=[...A.cages].sort((a,b)=>conf.has(a.g)-conf.has(b.g)),agora=new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+ for(const f of A.found)vistos.add(f.id);for(const f of A.achou)vistos.add(f.id);
+ const falta=A.found.length,enc=A.achou.length,esteira=[...vistos].filter(id=>place.has(id)&&!falt.has(id)).length,passou=enc+esteira,tot=falta+passou,pct=tot?Math.round(passou/tot*100):0;
+ const L=[...A.cages].sort((a,b)=>conf.has(a.g)-conf.has(b.g)).concat(A.aud),agora=new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
  // texto (WhatsApp)
  let t=`📦 *FALTANTES STAGE ZONE*${curDate?' — '+fmtDate(curDate):''}\n🕒 Atualizado ${agora}\n\n`+
-  `🔴 Faltam passar: *${falta}* em *${L.length}* endereço${L.length===1?'':'s'}\n✅ Já passaram: *${passou}* (${pct}%)\n\n`+
-  (L.length?'*Endereços para buscar:*\n'+L.map(c=>`${conf.has(c.g)?'✅':'▪'} *${c.g}* → ${c.ids.length} faltante${c.ids.length>1?'s':''}${conf.has(c.g)?' _(conferido, falta esteira)_':''}`).join('\n'):'🎉 Todos os faltantes das gaiolas foram encontrados!');
+  `🔴 Faltam passar: *${falta}* em *${A.cages.length}* endereço${A.cages.length===1?'':'s'}\n✅ Encontrados: *${passou}* (${pct}%) — ${enc} no HH · ${esteira} na esteira\n${A.aud.length?'🟢 Gaiolas auditadas: *'+A.aud.length+'*\n':''}\n`+
+  (L.length?'*Endereços para buscar:*\n'+L.map(c=>!c.ids.length?`🟢 *${c.g}* → AUDITADA (${c.ach.length} achado${c.ach.length>1?'s':''} no HH)`:`${conf.has(c.g)?'✅':'▪'} *${c.g}* → ${c.ids.length} faltante${c.ids.length>1?'s':''}${c.ach&&c.ach.length?' _('+c.ach.length+' já achado'+(c.ach.length>1?'s':'')+' no HH)_':''}${conf.has(c.g)?' _(conferido, falta esteira)_':''}`).join('\n'):'🎉 Todos os faltantes das gaiolas foram encontrados!');
  if(window.__repShift){window.__repShift=false;try{await navigator.clipboard.writeText(t);note('Reporte em texto copiado.','ok')}catch(e){note('A cópia foi bloqueada pelo navegador.','err')}return}
  // imagem no padrão dos relatórios KN
  const rotas={};falt.forEach(v=>{let m=String(v.route||'').match(/_((?:AM|PM|SD|CPM)\d*)$/i);if(m)rotas[m[1].toUpperCase()]=(rotas[m[1].toUpperCase()]||0)+1});
  const ciclo=Object.entries(rotas).sort((a,b)=>b[1]-a[1]).map(x=>x[0])[0]||'DIA COMPLETO',dt=new Date();
  note('Gerando imagem do reporte…');
- const K={falta,passou,pct,ciclo,agora,nconf:L.filter(c=>conf.has(c.g)).length,data:dt.toLocaleDateString('pt-BR'),hora:dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})};
+ const K={falta,passou,pct,enc,esteira,nend:A.cages.length,naud:A.aud.length,ciclo,agora,nconf:L.filter(c=>conf.has(c.g)).length,data:dt.toLocaleDateString('pt-BR'),hora:dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})};
  const cvP=repCanvas(L,K).catch(()=>null).then(cv=>cv||reportCanvas(L,K));
  const blobP=cvP.then(cv=>new Promise(r=>cv.toBlob(r,'image/png')));
  try{await navigator.clipboard.write([new ClipboardItem({'image/png':blobP})]);
@@ -402,8 +410,8 @@ function reportCanvas(L,K){
   let gr=x.createLinearGradient(X,Y,X+cw,Y+ch);gr.addColorStop(0,'#3a1527');gr.addColorStop(1,'#0f2a40');x.fillStyle=gr;rr(X,Y,cw,ch,16);x.fill();x.strokeStyle='rgba(255,90,110,.55)';x.lineWidth=1.2;x.stroke();
   x.fillStyle='#9cc4d9';x.font=F(700,12);x.fillText('ENDEREÇO',X+18,Y+28);
   x.fillStyle='#ffffff';x.font=F(800,20);x.fillText(cg.g,X+18,Y+54);
-  x.fillStyle='#ff5a6e';x.font=F(900,40);const n=String(cg.ids.length);x.fillText(n,X+18,Y+100);const nw=x.measureText(n).width;
-  x.fillStyle='#c9dbe6';x.font=F(500,14);x.fillText(cg.ids.length>1?'faltantes':'faltante',X+24+nw,Y+99);
+  const au=!cg.ids.length;x.fillStyle=au?'#5fe0b0':'#ff5a6e';x.font=F(900,40);const n=String(au?cg.ach.length:cg.ids.length);x.fillText(n,X+18,Y+100);const nw=x.measureText(n).width;
+  x.fillStyle='#c9dbe6';x.font=F(500,14);x.fillText(au?'achados · AUDITADA':cg.ids.length>1?'faltantes':'faltante',X+24+nw,Y+99);
   if(cg.routes&&cg.routes.size){const rs=[...cg.routes.keys()].map(r=>r.replace(/_AM\d*|_PM\d*|_SD\d*/i,''));x.fillStyle='#83d3fa';x.font=F(600,12);let k=Math.min(3,rs.length),rt;do{rt=rs.slice(0,k).join(' · ')+(rs.length>k?' +'+(rs.length-k):'');k--}while(k>0&&x.measureText(rt).width>cw-120);x.textAlign='right';x.fillText(rt,X+cw-16,Y+28);x.textAlign='left'}});
  x.fillStyle='#5f8299';x.font=F(500,13);x.fillText('Gerado pelo app Stage Zone',P,H-24);
  return c}
@@ -491,8 +499,14 @@ async function cloudLoad(manual){cloudBtn('☁ Buscando…',true);
  catch(e){if(manual||!place.size)note('⚠ Não consegui buscar a Stage Zone da nuvem ('+(e.message==='Failed to fetch'?'sem acesso à internet/Supabase':e.message)+'). Você pode subir o arquivo normalmente.','err')}
  finally{cloudBtn('☁ Nuvem')}}
 $('syncBtn').onclick=()=>cloudLoad(true);
+async function hhLoad(){ // pacotes achados pelo HH (robô do Sheets) — mesma data da Stage Zone carregada
+ try{let r=await fetch(SB_URL+'?id=eq.achados&select=data_ref,payload,atualizado_em',{headers:SBH,cache:'no-store'});if(!r.ok)return;
+  let [row]=await r.json(),m=new Map();
+  if(row&&row.payload&&(!curDate||String(row.data_ref)===curDate))String(row.payload).split('\n').forEach(l=>{let[i,g,h]=l.split('\t');if(i)m.set(i,{g,h:h||''})});
+  const sig=[...m.keys()].join(',')+'|'+curDate;if(sig!==hhSig){hhSig=sig;hh=m;render()}}catch(e){}}
+setInterval(hhLoad,15000);
 render();
-cloudLoad(false);
+cloudLoad(false).then(hhLoad);
 </script>
 <script type="text/plain" id="szRepCss">
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800;900&display=swap');
