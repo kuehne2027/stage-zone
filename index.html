@@ -436,6 +436,11 @@ async function onFalt(files){if(!files||!files.length)return;let msg=[];
  // vários arquivos escolhidos juntos no mesmo envio são somados entre si
  const antes=falt,bAntes=batch;falt=new Map();batch=0;
  for(const f of files){try{let r=addFaltRows(await readRows(f),f.name);msg.push(`${f.name}: ${r.novos} faltantes`)}catch(e){falt=antes;batch=bAntes;saveFalt();note('⚠ Erro ao ler '+f.name+': '+e.message+' — lista anterior mantida.','err');return}}
+ const cic=m=>{let c={};m.forEach(v=>{let x=String(v.route||'').match(/_((?:AM|PM|SD|CPM)\d*)$/i);if(x){x=x[1].toUpperCase();c[x]=(c[x]||0)+1}});return Object.entries(c).sort((a,b)=>b[1]-a[1]).map(x=>x[0])[0]||''};
+ const cA=cic(antes),cN=cic(falt);
+ if(antes.size&&cA&&cN&&cA!==cN){
+  if(!confirm(`Atenção: o arquivo novo é do ciclo ${cN}, mas a lista atual é do ciclo ${cA}.\n\nOK = trocar para o ciclo ${cN} (zera o "Já passaram" e as conferências)\nCancelar = manter a lista ${cA}`)){falt=antes;batch=bAntes;saveFalt();note(`Arquivo ignorado: é do ciclo ${cN}. Lista do ciclo ${cA} mantida.`,'err');render();return}
+  vistos=new Set();conf=new Map();saveConf();antes.clear()}
  let sairam=0;antes.forEach((v,id)=>{if(!falt.has(id))sairam++});let entraram=0;falt.forEach((v,id)=>{if(!antes.has(id))entraram++});
  if(antes.size)msg.push(`${sairam} saíram da lista · ${entraram} novos`);saveFalt();
  $('faltDrop').classList.add('done');$('faltStatus').textContent='✓ '+falt.size.toLocaleString('pt-BR')+' faltantes (último envio)';
