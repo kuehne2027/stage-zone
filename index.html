@@ -7,12 +7,13 @@
 @media(max-width:680px){.grid{grid-template-columns:1fr 1fr;gap:7px}.grid .panel{padding:9px}.grid .panel h3{font-size:11px}.grid input[type=file]{font-size:10px;padding:6px 3px}}
 
 .one-import{display:flex;align-items:center;gap:11px;margin:3px 0 12px;min-height:34px;flex-wrap:wrap}.one-import .file-button{display:inline-flex;align-items:center;padding:8px 12px;border:1px solid #365d72;background:#183c52;color:#dff3fd;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer}.one-import input[type=file]{position:absolute;width:1px;height:1px;opacity:0;clip-path:inset(50%)}.one-import .file-label{font-size:11px;color:#9ebdce}.one-import:focus-within .file-button{outline:2px solid #22b8de}
-.demo-arrow{width:30px;height:30px;display:inline-grid;place-items:center;border:1px solid #365d72;border-radius:8px;background:#143449;color:#9eddf4;padding:0;font-size:16px;line-height:1;flex:none}.demo-arrow:hover{background:#20516a;color:white}.one-import{gap:7px;margin:2px 0 10px}.one-import .file-label{font-size:10px;color:#769eb4}.one-import .file-button{padding:7px 10px}.demo-arrow:focus-visible{outline:2px solid #22b8de;outline-offset:2px}.card.addr .chk{position:absolute;top:9px;right:9px;font-size:11px;font-weight:800;padding:4px 9px;border-radius:20px;border:1px solid #4a7391;color:#cfe6f5;background:#0b2a44;cursor:pointer;user-select:none}
-.card.addr .chk:hover{border-color:#24cf93;color:#fff}
-.card.addr .chk.on{background:#24cf93;border-color:#24cf93;color:#062418}
-.card.addr.conf{border-color:#24cf93!important;background:linear-gradient(150deg,#0f3b31,#0a2640 70%)!important}
-.card.addr.conf .q{color:#5fe0b0}
-.card.addr .cf{margin-top:7px;font-size:11px;color:#9fe9cb;font-weight:700}
+.demo-arrow{width:30px;height:30px;display:inline-grid;place-items:center;border:1px solid #365d72;border-radius:8px;background:#143449;color:#9eddf4;padding:0;font-size:16px;line-height:1;flex:none}.demo-arrow:hover{background:#20516a;color:white}.one-import{gap:7px;margin:2px 0 10px}.one-import .file-label{font-size:10px;color:#769eb4}.one-import .file-button{padding:7px 10px}.demo-arrow:focus-visible{outline:2px solid #22b8de;outline-offset:2px}.card .chk{position:absolute;top:9px;right:9px;font-size:11px;font-weight:800;padding:4px 9px;border-radius:20px;border:1px solid #4a7391;color:#cfe6f5;background:#0b2a44;cursor:pointer;user-select:none}
+.card .chk:hover{border-color:#24cf93;color:#fff}
+.card .chk.on{background:#24cf93;border-color:#24cf93;color:#062418}
+.card.conf{border-color:#24cf93!important;background:linear-gradient(150deg,#0f3b31,#0a2640 70%)!important}
+.card.conf .q{color:#5fe0b0}
+.card .cf{margin-top:7px;font-size:11px;color:#9fe9cb;font-weight:700}
+.card .chk.bot{position:static;display:inline-block;margin-top:9px}
 .cfb{font-style:normal;font-size:11px;font-weight:800;color:#24cf93;margin-left:8px}
 </style><style>
 .mini-import{grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px}
@@ -293,7 +294,7 @@ function render(){
  if(tab==='cards'){
   if(!place.size)h=`<div class="empty">Importe a planilha da Stage Zone para começar.</div>`;
   else if(!falt.size)h=`<div class="empty">Stage Zone carregada (${place.size.toLocaleString('pt-BR')} pacotes em ${stageCages().length} gaiolas).<br>Agora suba ou cole os faltantes — os cards aparecem na hora.</div>`;
-  else{let list=A.cages.filter(match);h='<div class="cards">'+(list.length?list.map(c=>card(c,true)).join(''):'<div class="empty" style="grid-column:1/-1">Nenhum faltante encontrado em gaiola.</div>')+'</div>'}
+  else{let list=A.cages.filter(match).sort((a,b)=>conf.has(a.g)-conf.has(b.g));h='<div class="cards">'+(list.length?list.map(c=>card(c,true)).join(''):'<div class="empty" style="grid-column:1/-1">Nenhum faltante encontrado em gaiola.</div>')+'</div>'}
  }else if(tab==='stage'){
   // só os IDs que estão na lista de faltantes; endereço sem faltante some da tela
   let list=stageCages().map(c=>({...c,ids:c.ids.filter(i=>falt.has(i))})).filter(c=>c.ids.length).filter(match).map(c=>({...c,nf:c.ids.length}));
@@ -319,7 +320,8 @@ function render(){
 function card(c,isFalt){
  const k=(isFalt?'f:':'s:')+c.g,op=openCard===k,tot=cageTotal(c.g);
  let routes=isFalt?[...c.routes].sort((a,b)=>b[1]-a[1]).map(([r,n])=>`<span>${esc(r)}${n>1?' ×'+n:''}</span>`).join(''):'';
- let html=`<button type="button" class="card ${isFalt?'':'stg'} ${op?'open':''}" data-k="${esc(k)}">${isFalt&&c.novos?`<span class="new">+${c.novos} novo${c.novos>1?'s':''}</span>`:''}<div class="g">GAIOLA</div><div class="gn">${esc(c.g)}</div><div class="q">${c.ids.length}<small>${isFalt?'faltante'+(c.ids.length>1?'s':''):'pacote'+(c.ids.length>1?'s':'')}</small></div>${routes?`<div class="r">${routes}</div>`:''}${isFalt?`<div class="of">de ${tot} bipados nessa gaiola</div>`:''}</button>`;
+ const ok=isFalt&&conf.has(c.g);
+ let html=`<div role="button" tabindex="0" class="card ${isFalt?'':'stg'} ${op?'open':''}${ok?' conf':''}" data-k="${esc(k)}">${isFalt&&c.novos?`<span class="new">+${c.novos} novo${c.novos>1?'s':''}</span>`:''}<div class="g">GAIOLA</div><div class="gn">${esc(c.g)}</div><div class="q">${c.ids.length}<small>${isFalt?'faltante'+(c.ids.length>1?'s':''):'pacote'+(c.ids.length>1?'s':'')}</small></div>${routes?`<div class="r">${routes}</div>`:''}${isFalt?`<div class="of">de ${tot} bipados nessa gaiola</div>`:''}${isFalt?`${ok?`<div class="cf">Olhado no físico${conf.get(c.g)?' às '+esc(conf.get(c.g)):''} · falta passar na esteira</div>`:''}<span class="chk bot${ok?' on':''}" data-chk="${esc(c.g)}">${ok?'✓ Conferido':'○ Marcar como conferido'}</span>`:''}</div>`;
  if(op){html+=`<div class="detail"><h4>${esc(c.g)} — ${c.ids.length} ID${c.ids.length>1?'s':''}</h4><div class="idl">${c.ids.map(i=>`<span class="${!isFalt&&falt.has(i)?'f':''}">${esc(i)}${isFalt&&falt.get(i).route?' · '+esc(falt.get(i).route):''}</span>`).join('')}</div></div>`}
  return html}
 
