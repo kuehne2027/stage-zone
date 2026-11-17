@@ -374,7 +374,7 @@ function repHTML(L,K){
    +sec('ab','Endereços para buscar','ordenados pela quantidade de faltantes',AB,cardAB)
    +sec('au','Gaiolas auditadas / concluídas','nenhum faltante restante na gaiola',AU,cardAU)
    +(!EA.length&&!AB.length?'<div class="sz-done">✓ Todos os faltantes das gaiolas foram encontrados</div>':'')})()}
- <div class="rp-leg"><span><i class="r"></i>Para buscar</span><span><i class="y"></i>Em auditoria</span><span><i class="g"></i>Auditada</span><em>App Stage Zone · desenvolvido por Isis Costa Mello · ${esc(K.data)} ${esc(K.hora)}</em></div></main>`}
+ <div class="rp-leg"><span><i class="r"></i>Para buscar</span><span><i class="y"></i>Em auditoria</span><span><i class="g"></i>Auditada</span><em>Gerado pelo app Stage Zone · ${esc(K.data)} ${esc(K.hora)}</em></div></main>`}
 async function repCanvas(L,K){
  const fr=document.createElement('iframe');fr.style.cssText='position:fixed;left:-20000px;top:0;width:1300px;height:900px;border:0';document.body.appendChild(fr);
  try{
@@ -440,7 +440,7 @@ function reportCanvas(L,K){
   const au=!cg.ids.length;x.fillStyle=au?'#5fe0b0':'#ff5a6e';x.font=F(900,40);const n=String(au?cg.ach.length:cg.ids.length);x.fillText(n,X+18,Y+100);const nw=x.measureText(n).width;
   x.fillStyle='#c9dbe6';x.font=F(500,14);x.fillText(au?'achados · AUDITADA':cg.ids.length>1?'faltantes':'faltante',X+24+nw,Y+99);
   if(cg.routes&&cg.routes.size){const rs=[...cg.routes.keys()].map(r=>r.replace(/_AM\d*|_PM\d*|_SD\d*/i,''));x.fillStyle='#83d3fa';x.font=F(600,12);let k=Math.min(3,rs.length),rt;do{rt=rs.slice(0,k).join(' · ')+(rs.length>k?' +'+(rs.length-k):'');k--}while(k>0&&x.measureText(rt).width>cw-120);x.textAlign='right';x.fillText(rt,X+cw-16,Y+28);x.textAlign='left'}});
- x.fillStyle='#5f8299';x.font=F(500,13);x.fillText('App Stage Zone · desenvolvido por Isis Costa Mello',P,H-24);
+ x.fillStyle='#5f8299';x.font=F(500,13);x.fillText('Gerado pelo app Stage Zone',P,H-24);
  return c}
 
 /* ---------- eventos ---------- */
