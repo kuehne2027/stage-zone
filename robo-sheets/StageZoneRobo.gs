@@ -111,6 +111,7 @@ function robo(forcar) {
 
     const B = base_();                                 // faltantes + stage zone
     const achados = new Map();                         // id -> hora em que foi bipado
+    const emAuditoria = new Set();                     // endereços que já começaram a ser bipados no HH
 
     if (ultima > 1) {
       const n = ultima - 1;
@@ -118,10 +119,12 @@ function robo(forcar) {
       const v = rg.getValues();
       const out = [], bg = [], fc = [];
 
-      // 1º: o que já foi processado conta como achado
+      // 1º: o que já foi processado conta como achado; toda gaiola com pacote bipado fica "em auditoria"
       for (let i = 0; i < n; i++) {
         const id = normId_(v[i][1]);
         if (id && String(v[i][2]).indexOf('✅') === 0) achados.set(id, v[i][0]);
+        const pg = id && B.stage.get(id);
+        if (pg) emAuditoria.add(pg.g);
       }
       // 2º: processa as linhas novas (sem resultado), em ordem
       const restam = restamPorEnd_(B, achados);
@@ -160,6 +163,7 @@ function robo(forcar) {
       if (mudou) { rg.setValues(out); rg.setBackgrounds(bg); rg.setFontColors(fc); }
     }
 
+    B.emAuditoria = emAuditoria;
     painel_(B, achados);
     lista_(B, achados);
     props.setProperty('ultimaLinha', String(ultima));
@@ -207,6 +211,9 @@ function base_() {
   return { falt, stage, porEnd, dataStage: props.getProperty('dataStage') || '' };
 }
 
+function emAud_(B, g) { return !!(B.emAuditoria && B.emAuditoria.has(g)); }
+function status_(B, x) { return x.rst === 0 ? '✅ Auditada' : emAud_(B, x.g) ? '🟡 Em auditoria' : '🔴 A buscar'; }
+
 function restamPorEnd_(B, achados) {
   const m = new Map();
   B.porEnd.forEach((ids, g) => m.set(g, ids.filter(i => !achados.has(i)).length));
@@ -227,6 +234,8 @@ function painel_(B, achados) {
   const tot = L.reduce((s, x) => s + x.tot, 0), ach = L.reduce((s, x) => s + x.ach, 0), rst = tot - ach;
   const abertos = L.filter(x => x.rst > 0).length;
   const pct = tot ? ach / tot : 0;
+  // ordem: em auditoria primeiro, depois a buscar, auditadas no fim
+  L.sort((a, b) => (a.rst === 0) - (b.rst === 0) || emAud_(B, b.g) - emAud_(B, a.g) || b.rst - a.rst || a.g.localeCompare(b.g, 'pt', { numeric: true }));
 
   sh.clear(); sh.clearConditionalFormatRules();
   sh.getRange('A1:F1').merge().setValue('📦 FALTANTES STAGE ZONE — BIPAGEM HH')
@@ -249,10 +258,10 @@ function painel_(B, achados) {
   sh.getRange(7, 1, 1, 6).setValues([cab]);
   estiloCab_(sh, 6, 7);
   if (L.length) {
-    const rows = L.map(x => [x.g, x.tot, x.ach, x.rst, x.rst === 0 ? '✅ Auditada' : x.ach ? '🔎 Buscando' : '🔴 A buscar', x.rotas.slice(0, 6).join(' · ') + (x.rotas.length > 6 ? ' +' + (x.rotas.length - 6) : '')]);
+    const rows = L.map(x => [x.g, x.tot, x.ach, x.rst, status_(B, x), x.rotas.slice(0, 6).join(' · ') + (x.rotas.length > 6 ? ' +' + (x.rotas.length - 6) : '')]);
     const rg = sh.getRange(8, 1, rows.length, 6);
     rg.setValues(rows).setVerticalAlignment('middle');
-    rg.setBackgrounds(L.map(x => Array(6).fill(x.rst === 0 ? COR.verde : x.ach ? COR.amarelo : '#ffffff')));
+    rg.setBackgrounds(L.map(x => Array(6).fill(x.rst === 0 ? COR.verde : emAud_(B, x.g) ? COR.amarelo : '#ffffff')));
     sh.getRange(8, 4, rows.length, 1).setFontWeight('bold').setFontSize(14)
       .setFontColors(L.map(x => [x.rst === 0 ? COR.verdeT : COR.vermelhoT]));
     sh.getRange(8, 1, rows.length, 1).setFontWeight('bold');
@@ -272,7 +281,7 @@ function appTabs_(B, L, K) {
   // App Endereços — 1 linha por endereço (cabeçalho na linha 1, chave = Endereço)
   const e = aba_(ABA.APP_END);
   const cabE = ['Endereço', 'Faltantes', 'Achados', 'Restam', 'Status', 'Rotas', 'Ordem', 'Atualizado'];
-  const rowsE = L.map((x, i) => [x.g, x.tot, x.ach, x.rst, x.rst === 0 ? '✅ Auditada' : x.ach ? '🔎 Buscando' : '🔴 A buscar',
+  const rowsE = L.map((x, i) => [x.g, x.tot, x.ach, x.rst, status_(B, x),
     x.rotas.slice(0, 6).join(' · ') + (x.rotas.length > 6 ? ' +' + (x.rotas.length - 6) : ''), i + 1, agora]);
   e.getRange(1, 1, 1, cabE.length).setValues([cabE]);
   if (rowsE.length) e.getRange(2, 1, rowsE.length, cabE.length).setValues(rowsE);
@@ -283,8 +292,9 @@ function appTabs_(B, L, K) {
   let t = '📦 *FALTANTES STAGE ZONE*' + (B.dataStage ? ' — ' + B.dataStage : '') + '\n🕒 Atualizado ' + agora + '\n\n' +
     '🔴 Faltam passar: *' + K.rst + '* em *' + abertos.length + '* endereço' + (abertos.length === 1 ? '' : 's') + '\n' +
     '✅ Encontrados no HH: *' + K.ach + '* (' + Math.round(K.pct * 100) + '%)\n' +
-    (aud.length ? '🟢 Gaiolas auditadas: *' + aud.length + '*\n' : '') + '\n' +
-    (abertos.length ? '*Endereços para buscar:*\n' + abertos.map(x => '▪ *' + x.g + '* → ' + x.rst + ' faltante' + (x.rst > 1 ? 's' : '') + (x.ach ? ' _(' + x.ach + ' já achado' + (x.ach > 1 ? 's' : '') + ')_' : '')).join('\n')
+    (aud.length ? '🟢 Gaiolas auditadas: *' + aud.length + '*\n' : '') +
+    (abertos.filter(x => emAud_(B, x.g)).length ? '🟡 Em auditoria agora: *' + abertos.filter(x => emAud_(B, x.g)).length + '*\n' : '') + '\n' +
+    (abertos.length ? '*Endereços para buscar:*\n' + abertos.map(x => (emAud_(B, x.g) ? '🟡' : '▪') + ' *' + x.g + '* → ' + x.rst + ' faltante' + (x.rst > 1 ? 's' : '') + (x.ach ? ' _(' + x.ach + ' já achado' + (x.ach > 1 ? 's' : '') + ')_' : '')).join('\n')
       : '🎉 Todos os faltantes das gaiolas foram encontrados!') +
     (aud.length ? '\n\n*Gaiolas auditadas:*\n' + aud.map(x => '🟢 *' + x.g + '* (' + x.ach + ' achado' + (x.ach > 1 ? 's' : '') + ')').join('\n') : '');
   const r = aba_(ABA.APP_REP);
@@ -298,18 +308,18 @@ function lista_(B, achados) {
   const rows = [];
   B.porEnd.forEach((ids, g) => ids.forEach(id => {
     const a = achados.get(id);
-    rows.push([g, id, B.falt.get(id).rota, a ? '✅ Achado' : '🔴 Procurando', a ? (a instanceof Date ? Utilities.formatDate(a, 'America/Sao_Paulo', 'dd/MM HH:mm:ss') : String(a)) : '', B.stage.get(id).h]);
+    rows.push([g, id, B.falt.get(id).rota, a ? '✅ Achado' : '🔴 Procurando', a ? (a instanceof Date ? Utilities.formatDate(a, 'America/Sao_Paulo', 'dd/MM HH:mm:ss') : String(a)) : '', B.stage.get(id).h, emAud_(B, g) ? 'SIM' : '']);
   }));
   rows.sort((x, y) => (x[3] > y[3] ? -1 : x[3] < y[3] ? 1 : 0) || x[0].localeCompare(y[0], 'pt', { numeric: true }));
-  const cab = ['ENDEREÇO', 'ID DO PACOTE', 'ROTA', 'SITUAÇÃO', 'ACHADO EM', 'BIPADO NA GAIOLA'];
-  sh.getRange(1, 1, 1, 6).setValues([cab]); estiloCab_(sh, 6);
+  const cab = ['ENDEREÇO', 'ID DO PACOTE', 'ROTA', 'SITUAÇÃO', 'ACHADO EM', 'BIPADO NA GAIOLA', 'EM AUDITORIA'];
+  sh.getRange(1, 1, 1, 7).setValues([cab]); estiloCab_(sh, 7);
   if (rows.length) {
     sh.getRange(2, 2, rows.length, 1).setNumberFormat('@');
-    sh.getRange(2, 1, rows.length, 6).setValues(rows)
-      .setBackgrounds(rows.map(r => Array(6).fill(r[3].indexOf('✅') === 0 ? COR.verde : '#ffffff')));
+    sh.getRange(2, 1, rows.length, 7).setValues(rows)
+      .setBackgrounds(rows.map(r => Array(7).fill(r[3].indexOf('✅') === 0 ? COR.verde : r[6] ? COR.amarelo : '#ffffff')));
   }
-  limparSobra_(sh, rows.length + 1, 6);
-  sh.setFrozenRows(1); sh.setColumnWidths(1, 6, 140);
+  limparSobra_(sh, rows.length + 1, 7);
+  sh.setFrozenRows(1); sh.setColumnWidths(1, 7, 140);
 }
 
 /* ======================= STAGE ZONE (nuvem) ======================= */
