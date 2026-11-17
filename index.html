@@ -350,10 +350,22 @@ function repHTML(L,K){
  return `<main class="report" id="report"><header class="header header-kn"><div class="kn-main"><div class="kn-identity"><img alt="Kuehne+Nagel" class="kn-custom-logo" src="${$('szRepLogo').textContent.trim()}"></div><div class="kn-divider"></div><div class="kn-report-title"><div class="kn-overline">CONTROLE OPERACIONAL <span> / </span> SRJ1 CORDOVIL</div><h1>FALTANTES STAGE ZONE</h1><p>Localização dos faltantes nas gaiolas (endereços SR)</p></div></div>
  <div class="kn-strip"><div class="kn-strip-item">${svg('pin')}<span>UNIDADE</span><strong>SRJ1 · CORDOVIL</strong></div><div class="kn-strip-item">${svg('gear')}<span>CICLO OPERACIONAL</span><strong id="showCycle">${esc(K.ciclo)}</strong></div><div class="kn-strip-item">${svg('cal')}<span>DATA DO RELATÓRIO</span><strong id="showDate">${esc(K.data)}</strong></div></div></header>
  <div class="section-intro"><div><h2>${svg('bar')}Visão geral</h2><p>Faltantes bipados na Stage Zone${curDate?' em '+fmtDate(curDate):''} · atualizado às ${esc(K.hora)}</p></div><span class="tag">${svg('bar')} CONTROLE OPERACIONAL</span></div>
- <section class="cards"><div class="card"><div><span>FALTAM PASSAR</span><br><strong>${n(K.falta)}</strong><em>em ${n(K.nend)} endereço${K.nend===1?'':'s'}</em></div><span class="metric-icon">${svg('box')}</span></div>
- <div class="card"><div><span>ENCONTRADOS</span><br><strong>${n(K.passou)}</strong><em>${K.pct}% concluído · ${n(K.enc)} no HH</em></div><span class="metric-icon">${svg('ok')}</span></div>
- <div class="card"><div><span>ENDEREÇOS COM FALTANTE</span><br><strong>${n(K.nend)}</strong><em>${K.naud?n(K.naud)+' gaiola'+(K.naud>1?'s':'')+' auditada'+(K.naud>1?'s':''):K.nconf?K.nconf+' conferido'+(K.nconf>1?'s':'')+' no físico':'gaiolas para visitar'}</em></div><span class="metric-icon">${svg('pin')}</span></div></section>
- <section class="charts" style="grid-template-columns:1fr"><div class="panel"><h2>Endereços para buscar</h2>${L.length?`<div class="sz-grid">${L.map(c=>{const rs=[...(c.routes||new Map()).keys()].map(r=>r.replace(/_(AM|PM|SD|CPM)\d*$/i,''));const au=!c.ids.length,ok=au||conf.has(c.g),ea=!au&&hhAud.has(c.g);return `<div class="sz-addr${ok?' ok':''}${ea?' ea':''}">${au?'<span class="tg">✅ GAIOLA AUDITADA</span>':ea?'<span class="tg">🟡 EM AUDITORIA</span>':ok?'<span class="tg">✓ CONFERIDO · FALTA ESTEIRA</span>':''}<div class="l">ENDEREÇO</div><div class="g">${esc(c.g)}</div>${au?`<div class="n"><b>${c.ach.length}</b><small>encontrado${c.ach.length>1?'s':''} no HH</small></div>`:`<div class="n"><b>${c.ids.length}</b><small>faltante${c.ids.length>1?'s':''}</small></div>`}${rs.length?`<div class="r">Rotas: ${esc(rs.slice(0,4).join(' · '))}${rs.length>4?' +'+(rs.length-4):''}</div>`:''}</div>`}).join('')}</div>`:'<div class="sz-done">✓ Todos os faltantes das gaiolas foram encontrados</div>'}</div></section></main>`}
+ <section class="cards rp-k"><div class="card"><div><span>FALTAM PASSAR</span><br><strong>${n(K.falta)}</strong><em>em ${n(K.nend)} endereço${K.nend===1?'':'s'}</em></div><span class="metric-icon">${svg('box')}</span></div>
+ <div class="card"><div><span>ENCONTRADOS NO HH</span><br><strong>${n(K.enc)}</strong><em>${K.esteira?n(K.esteira)+' já passaram na esteira':'bipados nas gaiolas'}</em></div><span class="metric-icon">${svg('ok')}</span></div>
+ <div class="card"><div><span>EM AUDITORIA AGORA</span><br><strong>${n(K.nea)}</strong><em>gaiola${K.nea===1?'':'s'} sendo bipada${K.nea===1?'':'s'}</em></div><span class="metric-icon">${svg('pin')}</span></div>
+ <div class="card"><div><span>GAIOLAS AUDITADAS</span><br><strong>${n(K.naud)}</strong><em>todos os faltantes achados</em></div><span class="metric-icon">${svg('ok')}</span></div></section>
+ <div class="rp-prog"><div class="rp-prog-t"><b>Progresso da auditoria</b><span><strong>${n(K.passou)}</strong> de ${n(K.falta+K.passou)} faltantes encontrados · <strong>${K.pct}%</strong></span></div><div class="rp-bar"><i style="width:${Math.max(K.pct,K.passou?1:0)}%"></i></div></div>
+ ${(()=>{const EA=L.filter(c=>c.ids.length&&hhAud.has(c.g)),AB=L.filter(c=>c.ids.length&&!hhAud.has(c.g)),AU=L.filter(c=>!c.ids.length);
+  const rotas=c=>{const rs=[...(c.routes||new Map()).keys()].map(r=>r.replace(/_(AM|PM|SD|CPM)\d*$/i,''));return rs.length?`<div class="r">Rotas: ${esc(rs.slice(0,4).join(' · '))}${rs.length>4?' +'+(rs.length-4):''}</div>`:''};
+  const cardEA=c=>{const a=(c.ach||[]).length,t=a+c.ids.length;return `<div class="rp-c ea"><div class="rp-top"><span class="l">ENDEREÇO</span><span class="tg"><i></i>EM AUDITORIA</span></div><div class="g">${esc(c.g)}</div><div class="n"><b>${c.ids.length}</b><small>falta${c.ids.length>1?'m':''} achar</small></div><div class="rp-mini"><i style="width:${t?Math.round(a/t*100):0}%"></i></div><div class="s">${a} de ${t} achado${t>1?'s':''} no HH</div></div>`};
+  const cardAB=c=>`<div class="rp-c ab"><div class="rp-top"><span class="l">ENDEREÇO</span>${conf.has(c.g)?'<span class="tg cf">CONFERIDO</span>':''}</div><div class="g">${esc(c.g)}</div><div class="n"><b>${c.ids.length}</b><small>faltante${c.ids.length>1?'s':''}</small></div>${rotas(c)}</div>`;
+  const cardAU=c=>`<div class="rp-c au"><div class="rp-top"><span class="l">ENDEREÇO</span><span class="tg">✓ AUDITADA</span></div><div class="g">${esc(c.g)}</div><div class="n"><b>${c.ach.length}</b><small>achado${c.ach.length>1?'s':''} no HH</small></div><div class="s">Todos os faltantes encontrados</div></div>`;
+  const sec=(cls,tit,sub,arr,fn)=>arr.length?`<section class="rp-sec ${cls}"><div class="rp-h"><span class="dot"></span><h2>${tit}</h2><span class="cnt">${arr.length}</span><p>${sub}</p></div><div class="rp-grid">${arr.map(fn).join('')}</div></section>`:'';
+  return sec('ea','Em auditoria agora','gaiolas que já começaram a ser bipadas no HH',EA,cardEA)
+   +sec('ab','Endereços para buscar','ordenados pela quantidade de faltantes',AB,cardAB)
+   +sec('au','Gaiolas auditadas','todos os faltantes da gaiola foram encontrados',AU,cardAU)
+   +(!EA.length&&!AB.length?'<div class="sz-done">✓ Todos os faltantes das gaiolas foram encontrados</div>':'')})()}
+ <div class="rp-leg"><span><i class="r"></i>Para buscar</span><span><i class="y"></i>Em auditoria</span><span><i class="g"></i>Auditada</span><em>Gerado pelo app Stage Zone · ${esc(K.data)} ${esc(K.hora)}</em></div></main>`}
 async function repCanvas(L,K){
  const fr=document.createElement('iframe');fr.style.cssText='position:fixed;left:-20000px;top:0;width:1300px;height:900px;border:0';document.body.appendChild(fr);
  try{
@@ -365,23 +377,27 @@ async function repCanvas(L,K){
   await Promise.all([...d.images].map(im=>im.complete?0:new Promise(r=>{im.onload=im.onerror=r})));
   await new Promise(r=>setTimeout(r,200));
   const el=d.getElementById('report');fr.style.height=(el.scrollHeight+20)+'px';
-  return await w.html2canvas(el,{scale:2,backgroundColor:'#ffffff',useCORS:true});
+  return await w.html2canvas(el,{scale:3,backgroundColor:'#ffffff',useCORS:true});
  }finally{setTimeout(()=>fr.remove(),0)}}
 async function copyReport(){const A=analyse();
  if(!falt.size||!place.size){note('Carregue a Stage Zone e os faltantes para gerar o reporte.','err');return}
  for(const f of A.found)vistos.add(f.id);for(const f of A.achou)vistos.add(f.id);
  const falta=A.found.length,enc=A.achou.length,esteira=[...vistos].filter(id=>place.has(id)&&!falt.has(id)).length,passou=enc+esteira,tot=falta+passou,pct=tot?Math.round(passou/tot*100):0;
- const L=[...A.cages].sort((a,b)=>conf.has(a.g)-conf.has(b.g)).concat(A.aud),agora=new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+ const L=[...A.cages].sort((a,b)=>hhAud.has(b.g)-hhAud.has(a.g)||b.ids.length-a.ids.length).concat(A.aud),agora=new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
  // texto (WhatsApp)
  let t=`📦 *FALTANTES STAGE ZONE*${curDate?' — '+fmtDate(curDate):''}\n🕒 Atualizado ${agora}\n\n`+
   `🔴 Faltam passar: *${falta}* em *${A.cages.length}* endereço${A.cages.length===1?'':'s'}\n✅ Encontrados: *${passou}* (${pct}%) — ${enc} no HH · ${esteira} na esteira\n${A.aud.length?'🟢 Gaiolas auditadas: *'+A.aud.length+'*\n':''}${A.cages.filter(c=>hhAud.has(c.g)).length?'🟡 Em auditoria agora: *'+A.cages.filter(c=>hhAud.has(c.g)).length+'*\n':''}\n`+
-  (L.length?'*Endereços para buscar:*\n'+L.map(c=>!c.ids.length?`🟢 *${c.g}* → AUDITADA (${c.ach.length} achado${c.ach.length>1?'s':''} no HH)`:`${hhAud.has(c.g)?'🟡':conf.has(c.g)?'✅':'▪'} *${c.g}* → ${c.ids.length} faltante${c.ids.length>1?'s':''}${c.ach&&c.ach.length?' _('+c.ach.length+' já achado'+(c.ach.length>1?'s':'')+' no HH)_':''}${conf.has(c.g)?' _(conferido, falta esteira)_':''}`).join('\n'):'🎉 Todos os faltantes das gaiolas foram encontrados!');
+  (()=>{const EA=L.filter(c=>c.ids.length&&hhAud.has(c.g)),AB=L.filter(c=>c.ids.length&&!hhAud.has(c.g)),AU=L.filter(c=>!c.ids.length);let x='';
+   if(EA.length)x+='🟡 *EM AUDITORIA AGORA*\n'+EA.map(c=>{const a=(c.ach||[]).length;return `   *${c.g}* → falta${c.ids.length>1?'m':''} *${c.ids.length}* (${a} de ${a+c.ids.length} achados)`}).join('\n')+'\n\n';
+   if(AB.length)x+='🔴 *PARA BUSCAR*\n'+AB.map(c=>`   *${c.g}* → ${c.ids.length} faltante${c.ids.length>1?'s':''}${conf.has(c.g)?' _(conferido)_':''}`).join('\n')+'\n\n';
+   if(AU.length)x+='🟢 *AUDITADAS*\n'+AU.map(c=>`   *${c.g}* ✓ ${c.ach.length} achado${c.ach.length>1?'s':''}`).join('\n')+'\n';
+   if(!EA.length&&!AB.length)x+='🎉 Todos os faltantes das gaiolas foram encontrados!';return x.trim()})();
  if(window.__repShift){window.__repShift=false;try{await navigator.clipboard.writeText(t);note('Reporte em texto copiado.','ok')}catch(e){note('A cópia foi bloqueada pelo navegador.','err')}return}
  // imagem no padrão dos relatórios KN
  const rotas={};falt.forEach(v=>{let m=String(v.route||'').match(/_((?:AM|PM|SD|CPM)\d*)$/i);if(m)rotas[m[1].toUpperCase()]=(rotas[m[1].toUpperCase()]||0)+1});
  const ciclo=Object.entries(rotas).sort((a,b)=>b[1]-a[1]).map(x=>x[0])[0]||'DIA COMPLETO',dt=new Date();
  note('Gerando imagem do reporte…');
- const K={falta,passou,pct,enc,esteira,nend:A.cages.length,naud:A.aud.length,ciclo,agora,nconf:L.filter(c=>conf.has(c.g)).length,data:dt.toLocaleDateString('pt-BR'),hora:dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})};
+ const K={falta,passou,pct,enc,esteira,nend:A.cages.length,naud:A.aud.length,nea:A.cages.filter(c=>hhAud.has(c.g)).length,ciclo,agora,nconf:L.filter(c=>conf.has(c.g)).length,data:dt.toLocaleDateString('pt-BR'),hora:dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})};
  const cvP=repCanvas(L,K).catch(()=>null).then(cv=>cv||reportCanvas(L,K));
  const blobP=cvP.then(cv=>new Promise(r=>cv.toBlob(r,'image/png')));
  try{await navigator.clipboard.write([new ClipboardItem({'image/png':blobP})]);
@@ -706,6 +722,30 @@ body{background:#edf5ff!important}.report{max-width:1320px!important;background:
 .sz-addr .n small{font-size:11px;color:#5b6f84;font-weight:700}
 .sz-addr .r{margin-top:6px;font-size:10px;color:#2f6aa3;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sz-addr.ok{border-left-color:#1aa37a;background:#f2fbf7}
+.report .cards.rp-k{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important}
+.rp-prog{margin:4px 30px 6px;background:#fff;border:1px solid #dce7f3;border-radius:14px;padding:14px 18px;box-shadow:0 4px 12px #123e690d}
+.rp-prog-t{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}.rp-prog-t b{font-size:15px;color:#0b315b;font-weight:800}.rp-prog-t span{font-size:14px;color:#3d5670}.rp-prog-t strong{color:#0b315b;font-weight:900}
+.rp-bar{height:14px;border-radius:10px;background:#e9eff6;overflow:hidden}.rp-bar i{display:block;height:100%;border-radius:10px;background:linear-gradient(90deg,#13a36e,#3fd49a)}
+.rp-sec{margin:16px 30px 0;background:#fff;border:1px solid #dce7f3;border-radius:16px;overflow:hidden;box-shadow:0 4px 14px #123e690d}
+.rp-h{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid #e6eef6}.rp-h h2{margin:0;font-size:18px;font-weight:900;color:#0b315b}.rp-h p{margin:0 0 0 auto;font-size:12px;color:#6b8199}
+.rp-h .dot{width:12px;height:12px;border-radius:50%}.rp-h .cnt{font-size:13px;font-weight:900;color:#fff;border-radius:20px;padding:2px 10px}
+.rp-sec.ea .rp-h{background:#fff7dc}.rp-sec.ea .dot,.rp-sec.ea .cnt{background:#e0a100}
+.rp-sec.ab .rp-h{background:#fdecee}.rp-sec.ab .dot,.rp-sec.ab .cnt{background:#d62839}
+.rp-sec.au .rp-h{background:#e3f7ee}.rp-sec.au .dot,.rp-sec.au .cnt{background:#13a36e}
+.rp-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:14px 16px 16px}
+.rp-c{position:relative;border:1px solid #dce7f3;border-left:6px solid #d62839;border-radius:12px;padding:11px 14px 12px;background:#fff}
+.rp-c .rp-top{display:flex;justify-content:space-between;align-items:center}.rp-c .l{font-size:10px;font-weight:800;letter-spacing:.8px;color:#6b8199}
+.rp-c .tg{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:900;letter-spacing:.3px;border-radius:20px;padding:3px 9px;color:#fff;background:#13a36e}
+.rp-c .tg i{width:8px;height:8px;border-radius:50%;background:#fff}.rp-c .tg.cf{background:#2f6aa3}
+.rp-c .g{font-size:19px;font-weight:900;color:#0b315b;margin-top:3px}
+.rp-c .n{display:flex;align-items:baseline;gap:7px;margin-top:5px}.rp-c .n b{font-size:36px;line-height:1;font-weight:900;color:#d62839}.rp-c .n small{font-size:12px;color:#4d6279;font-weight:800}
+.rp-c .r{margin-top:7px;font-size:11px;color:#2f6aa3;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rp-c .s{margin-top:6px;font-size:12px;font-weight:800;color:#4d6279}
+.rp-c.ea{border-left-color:#e0a100;background:#fffbea}.rp-c.ea .tg{background:#e0a100}.rp-c.ea .n b{color:#b47a00}
+.rp-mini{height:8px;border-radius:6px;background:#f1e3b0;overflow:hidden;margin-top:8px}.rp-mini i{display:block;height:100%;background:#13a36e;border-radius:6px}
+.rp-c.au{border-left-color:#13a36e;background:#f2fbf7}.rp-c.au .n b{color:#0f8a5c}.rp-c.au .s{color:#0f8a5c}
+.rp-leg{display:flex;align-items:center;gap:18px;margin:14px 30px 22px;font-size:12px;font-weight:800;color:#3d5670}.rp-leg span{display:inline-flex;align-items:center;gap:6px}.rp-leg i{width:12px;height:12px;border-radius:3px;display:inline-block}.rp-leg i.r{background:#d62839}.rp-leg i.y{background:#e0a100}.rp-leg i.g{background:#13a36e}.rp-leg em{margin-left:auto;font-style:normal;color:#8aa0b5;font-weight:600}
+
 .sz-addr.ea{border-left-color:#e0a800;background:#fff8e1}.sz-addr.ea .tg{background:#ffc83d;color:#3a2a00}.sz-addr.ea .n b{color:#a06b00}.sz-addr.ok .n b{color:#13805f}.sz-addr .tg{position:absolute;top:10px;right:10px;background:#1aa37a;color:#fff;font-size:8.5px;font-weight:900;letter-spacing:.4px;border-radius:20px;padding:3px 7px}
 .sz-done{padding:30px;text-align:center;font-size:18px;font-weight:800;color:#116f5c}
 .cards{grid-template-columns:repeat(3,minmax(0,1fr))!important}
