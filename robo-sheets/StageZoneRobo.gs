@@ -9,6 +9,8 @@
  *   • Stage Zone        → bipagens das gaiolas (puxadas da nuvem do app Stage Zone)
  *   • App Endereços     → tabela do AppSheet: endereço, faltantes, achados, restam, status
  *   • App Reporte       → tabela do AppSheet: números do topo + texto pronto pro WhatsApp
+ *   • Respostas HH      → leituras da página do HH (Google Forms; menu 📲 Criar formulário do HH)
+ *   • Config HH         → endereço do formulário, lido pela página do HH
  *
  * Rode pela conta pessoal (megakn2026) — na conta da empresa o Apps Script é bloqueado.
  ******************************************************************/
@@ -23,7 +25,9 @@ const ABA = {
   LISTA: 'Faltantes nas gaiolas',
   STAGE: 'Stage Zone',
   APP_END: 'App Endereços',
-  APP_REP: 'App Reporte'
+  APP_REP: 'App Reporte',
+  FORM: 'Respostas HH',
+  CFG: 'Config HH'
 };
 const BIP_CAB = ['Data/Hora', 'ID lido', 'Resultado', 'Endereço', 'Restam no endereço', 'Rota'];
 const COR = { azul: '#0b2944', azul2: '#123b5c', verde: '#d9f7e8', verdeT: '#0a7a4b', vermelho: '#ffe1e5', vermelhoT: '#c4122f', amarelo: '#fff4cc', cinza: '#eef2f6' };
@@ -36,6 +40,7 @@ function onOpen() {
     .addSeparator()
     .addItem('🧹 Zerar bipagens (novo ciclo)', 'zerarBipagens')
     .addSeparator()
+    .addItem('📲 Criar formulário do HH', 'criarFormularioHH')
     .addItem('⚙ Instalar robô (1ª vez)', 'instalar')
     .addItem('⏸ Pausar robô', 'pausar')
     .addToUi();
@@ -104,6 +109,8 @@ function robo(forcar) {
     const props = PropertiesService.getDocumentProperties();
     // puxa da nuvem (app Stage Zone) faltantes e Stage Zone novos; Stage Zone de outra data zera as bipagens
     try { if (sincronizarNuvem_()) forcar = true; } catch (e) { console.log('Nuvem: ' + e.message); }
+    // leituras feitas pela página do HH (chegam pelo Google Forms) entram na aba Bipagem HH
+    try { importarForm_(); } catch (e) { console.log('Form: ' + e.message); }
     const bip = aba_(ABA.BIP);
     const ultima = bip.getLastRow();
     const feita = Number(props.getProperty('ultimaLinha') || 1);
@@ -367,7 +374,57 @@ function puxarFaltantes_() {
 function zerarSemPerguntar_() {
   const bip = aba_(ABA.BIP);
   if (bip.getLastRow() > 1) bip.getRange(2, 1, bip.getLastRow() - 1, bip.getMaxColumns()).clearContent().setBackground(null).setFontColor(null);
-  PropertiesService.getDocumentProperties().deleteProperty('ultimaLinha');
+  const fs = SpreadsheetApp.getActive().getSheetByName(ABA.FORM);
+  if (fs && fs.getLastRow() > 1) fs.getRange(2, 1, fs.getLastRow() - 1, fs.getLastColumn()).clearContent();
+  const pr = PropertiesService.getDocumentProperties();
+  pr.deleteProperty('ultimaLinha'); pr.setProperty('formLidas', '1');
+}
+
+/* ======================= FORMULÁRIO DO HH ======================= */
+// A página do HH (kuehne2027.github.io/stage-zone/hh) grava cada leitura neste formulário.
+function criarFormularioHH() {
+  const ss = SpreadsheetApp.getActive(), props = PropertiesService.getDocumentProperties();
+  let f = null;
+  if (props.getProperty('formId')) { try { f = FormApp.openById(props.getProperty('formId')); } catch (e) { f = null; } }
+  if (!f) {
+    f = FormApp.create('Stage Zone – Bipagem HH');
+    f.setCollectEmail(false);
+    f.addTextItem().setTitle('ID lido').setRequired(true);
+    f.setDestination(FormApp.DestinationType.SPREADSHEET, ss.getId());
+    props.setProperty('formId', f.getId());
+    SpreadsheetApp.flush(); Utilities.sleep(4000);
+  }
+  // a aba de respostas passa a se chamar "Respostas HH"
+  const destino = ss.getSheets().find(sh => { try { const u = sh.getFormUrl(); return u && u.indexOf(f.getId()) >= 0; } catch (e) { return false; } });
+  if (destino && destino.getName() !== ABA.FORM) destino.setName(ABA.FORM);
+  // endereço de envio e o código do campo (entry.xxxx), lidos pela página do HH
+  const item = f.getItems()[0].asTextItem();
+  const pre = f.createResponse().withItemResponse(item.createResponse('X')).toPrefilledUrl();
+  const entry = (pre.match(/entry\.\d+/) || ['entry.' + item.getId()])[0];
+  const action = f.getPublishedUrl().replace(/\/viewform.*$/, '/formResponse');
+  const cfg = aba_(ABA.CFG);
+  cfg.clearContents();
+  cfg.getRange(1, 1, 2, 2).setValues([['FORM_ACTION', 'ENTRY'], [action, entry]]);
+  props.setProperty('formLidas', String(destino ? Math.max(1, destino.getLastRow()) : 1));
+  SpreadsheetApp.getUi().alert('Formulário do HH pronto ✅',
+    'A página do HH já pode ser usada:\nkuehne2027.github.io/stage-zone/hh\n\nAs leituras vão aparecer na aba "' + ABA.FORM + '" e entram sozinhas na Bipagem HH.',
+    SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+function importarForm_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName(ABA.FORM);
+  if (!sh) return false;
+  const props = PropertiesService.getDocumentProperties();
+  const lidas = Number(props.getProperty('formLidas') || 1), fim = sh.getLastRow();
+  if (fim <= lidas) return false;
+  const v = sh.getRange(lidas + 1, 1, fim - lidas, 2).getDisplayValues().filter(r => r[1] !== '');
+  if (v.length) {
+    const bip = aba_(ABA.BIP), ini = bip.getLastRow() + 1;
+    bip.getRange(ini, 2, v.length, 1).setNumberFormat('@');
+    bip.getRange(ini, 1, v.length, 2).setValues(v.map(r => [r[0], String(r[1])]));
+  }
+  props.setProperty('formLidas', String(fim));
+  return v.length > 0;
 }
 
 /* ======================= STAGE ZONE (nuvem) ======================= */

@@ -544,9 +544,10 @@ function gvizRows(aba){return new Promise((res,rej)=>{const cb='__gv'+Date.now()
 let hhBusy=false;
 async function hhLoad(){
  if(hhBusy)return;hhBusy=true;
- try{const [ro,bi]=await Promise.allSettled([gvizRows(ROBO_ABA),gvizRows('Bipagem HH')]);let m=new Map(),au=new Set(),ok=false;
+ try{const [ro,bi,fo]=await Promise.allSettled([gvizRows(ROBO_ABA),gvizRows('Bipagem HH'),gvizRows('Respostas HH')]);let m=new Map(),au=new Set(),ok=false;
   // 1) direto da aba Bipagem HH (o AppSheet grava na hora) — o app faz a conta sozinho, sem esperar o robô
-  if(bi.status==='fulfilled'){ok=true;for(const x of bi.value.slice(1)){const id=normId(x[1]),p=id&&place.get(id);if(!p)continue;au.add(p.g);if(falt.has(id)&&!m.has(id))m.set(id,{g:p.g,h:hora(x[0]||'')})}}
+  const cru=[].concat(bi.status==='fulfilled'?bi.value.slice(1):[],fo.status==='fulfilled'?fo.value.slice(1):[]);
+  if(bi.status==='fulfilled'||fo.status==='fulfilled'){ok=true;for(const x of cru){const id=normId(x[1]),p=id&&place.get(id);if(!p)continue;au.add(p.g);if(falt.has(id)&&!m.has(id))m.set(id,{g:p.g,h:hora(x[0]||'')})}}
   // 2) o que o robô já processou (garante leituras que a aba crua não trouxe)
   if(ro.status==='fulfilled'){ok=true;for(const x of ro.value.slice(1)){const id=normId(x[1]),g=normCage(x[0])||x[0];if(id&&/✅|achado/i.test(x[3]||'')&&!m.has(id))m.set(id,{g,h:hora(x[4]||'')});if(/sim/i.test(x[6]||''))au.add(g)}}
   if(!ok)return;

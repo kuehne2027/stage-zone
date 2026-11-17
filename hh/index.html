@@ -2,14 +2,128 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>Stage Zone · Bipagem HH</title>
-<meta http-equiv="refresh" content="0; url=https://www.appsheet.com/start/e7c9707a-1f54-4bfb-a070-7637cec975dd">
-<style>body{margin:0;font-family:Arial,sans-serif;background:#0b2944;color:#fff;display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center}a{display:inline-block;margin-top:18px;background:#12a150;color:#fff;padding:16px 26px;border-radius:12px;font-weight:700;font-size:20px;text-decoration:none}</style>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:Arial,Helvetica,sans-serif;background:#0b2944;color:#fff;-webkit-tap-highlight-color:transparent}
+#app{min-height:100%;display:flex;flex-direction:column}
+header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#081e33;font-size:13px}
+header b{font-size:16px;letter-spacing:.5px}
+#st{font-size:12px;color:#9fc6e8;text-align:right}
+#st.err{color:#ffb4b4}
+#tela{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px;transition:background .12s}
+#tela.espera{background:#16466e}
+#tela.achou{background:#12a150}
+#tela.nao{background:#c75f00}
+#tela.ja{background:#0f7a51}
+#tela.inv{background:#5b6b7a}
+#ic{width:110px;height:110px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:72px;font-weight:900;line-height:1}
+#t1{margin-top:16px;font-size:48px;font-weight:900;letter-spacing:.5px;line-height:1.05}
+#t2{margin-top:10px;font-size:22px;font-weight:700}
+#t3{margin-top:6px;font-size:28px;font-weight:900;letter-spacing:1px}
+#t4{margin-top:6px;font-size:17px;opacity:.9}
+#campo{margin:0 14px 10px;padding:12px 14px;border-radius:12px;border:2px solid #2d6a9a;background:#0e3355;color:#fff;font-size:20px;width:calc(100% - 28px)}
+#campo:focus{outline:none;border-color:#ffd24d}
+#conta{display:flex;gap:8px;padding:0 14px 10px}
+#conta div{flex:1;background:#0e3355;border-radius:10px;padding:8px;text-align:center}
+#conta b{display:block;font-size:24px}
+#conta span{font-size:11px;color:#9fc6e8;text-transform:uppercase;letter-spacing:.5px}
+#hist{padding:0 14px 14px;font-size:14px}
+#hist div{display:flex;justify-content:space-between;padding:6px 8px;border-radius:8px;margin-top:4px;background:#0e3355}
+#hist .a{background:#0f5e3c}#hist .n{background:#5c3510}
+footer{padding:8px;text-align:center;font-size:11px;color:#7e9db8}
+</style>
 </head>
 <body>
-<div><div style="font-size:24px;font-weight:700">Abrindo o app de bipagem…</div>
-<a href="https://www.appsheet.com/start/e7c9707a-1f54-4bfb-a070-7637cec975dd">Toque aqui se não abrir</a></div>
-<script>location.replace('https://www.appsheet.com/start/e7c9707a-1f54-4bfb-a070-7637cec975dd')</script>
+<div id="app">
+  <header><b>STAGE ZONE · BIPAGEM</b><span id="st">carregando lista…</span></header>
+  <div id="tela" class="espera">
+    <div id="ic" style="color:#16466e">›</div>
+    <div id="t1">BIPE</div>
+    <div id="t2">o próximo pacote da gaiola</div>
+    <div id="t3"></div>
+    <div id="t4"></div>
+  </div>
+  <input id="campo" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="none" placeholder="Leitura do HH aparece aqui">
+  <div id="conta">
+    <div><b id="cB">0</b><span>bipados</span></div>
+    <div><b id="cA">0</b><span>achados</span></div>
+    <div><b id="cF">—</b><span>faltantes na lista</span></div>
+  </div>
+  <div id="hist"></div>
+  <footer>Desenvolvido por Isis Costa Mello</footer>
+</div>
+<script>
+// Planilha do robô (Stage Zone – Robô): lista de faltantes e endereço do formulário
+const PLANILHA='1Cp4Gm2kx5ebcnz3Q5CpqcAH2OOvAC1cxYCgbuvpIIyU';
+const $=id=>document.getElementById(id);
+let lista=new Map();      // id -> {g, achado}
+let cfg=null;             // {action, entry}
+let achadosAqui=new Set(),bip=0,ach=0,hist=[];
+let fila=[];try{fila=JSON.parse(localStorage.getItem('szFila')||'[]')}catch(e){}
+
+function normId(v){v=String(v||'').trim();if(/"name"\s*:/.test(v)||/^\W*SR\d*-\d/i.test(v))return '';{let k=v.match(/^\D*(\d{8,15})\s*SR\d*-\d/i);if(k)return k[1]}let m=v.match(/^\D*(\d{8,})\s*\{/);if(m)v=m[1];m=v.match(/"id"\s*:\s*"?(\d{8,})/);if(m&&!/^\d/.test(v))return m[1];let d=v.replace(/\D/g,'');if(d.length>15&&d.length%2===0&&d.slice(0,d.length/2)===d.slice(d.length/2))d=d.slice(0,d.length/2);return d.length>=8&&d.length<=15?d:''}
+
+// leitura da planilha pelo gviz (JSONP: funciona entre sites)
+function gviz(aba){return new Promise((res,rej)=>{const cb='__g'+Date.now()+Math.floor(Math.random()*1e4),sc=document.createElement('script');
+ const fim=()=>{clearTimeout(t);try{delete window[cb]}catch(e){window[cb]=undefined}sc.remove()},t=setTimeout(()=>{fim();rej('tempo esgotado')},20000);
+ window[cb]=d=>{fim();try{if(d.status==='error')return rej('erro');res(d.table.rows.map(r=>(r.c||[]).map(c=>c==null?'':String(c.f!=null?c.f:(c.v==null?'':c.v)))))}catch(e){rej(e)}};
+ sc.onerror=()=>{fim();rej('sem acesso à planilha')};
+ sc.src='https://docs.google.com/spreadsheets/d/'+PLANILHA+'/gviz/tq?tqx=out:json;responseHandler:'+cb+'&headers=1&sheet='+encodeURIComponent(aba)+'&_='+Date.now();
+ document.head.appendChild(sc)})}
+
+async function carregar(){
+ try{
+  const [fl,cf]=await Promise.all([gviz('Faltantes nas gaiolas'),gviz('Config HH').catch(()=>[])]);
+  const m=new Map();for(const r of fl){const id=normId(r[1]);if(id)m.set(id,{g:r[0],achado:/✅|achado/i.test(r[3]||'')})}
+  lista=m;$('cF').textContent=m.size;
+  if(cf.length&&cf[0][0]&&/formResponse/.test(cf[0][0]))cfg={action:cf[0][0],entry:cf[0][1]};
+  status(cfg?'lista ok · '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'⚠ formulário não configurado',!cfg);
+  enviarFila();
+ }catch(e){status('⚠ não consegui ler a lista ('+e+')',true)}}
+let stMsg='',stErr=false;function status(t,err){if(t!=null){stMsg=t;stErr=!!err}const s=$('st');s.textContent=stMsg+(fila.length?' · '+fila.length+' a enviar':'');s.className=stErr?'err':''}
+
+// grava a leitura na planilha pelo Google Forms
+function enviar(raw){fila.push({raw,t:Date.now()});salvarFila();enviarFila()}
+function salvarFila(){try{localStorage.setItem('szFila',JSON.stringify(fila))}catch(e){}}
+let enviando=false;
+async function enviarFila(){
+ if(enviando||!cfg||!fila.length)return;enviando=true;
+ while(fila.length){const it=fila[0];
+  try{await fetch(cfg.action,{method:'POST',mode:'no-cors',body:new URLSearchParams({[cfg.entry]:it.raw})});fila.shift();salvarFila()}
+  catch(e){break}}
+ enviando=false;status()}
+
+// som
+let ac=null;function bipe(f,d){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;o.connect(g);g.connect(ac.destination);g.gain.value=.25;o.start();o.stop(ac.currentTime+d)}catch(e){}}
+
+function mostrar(cls,ic,icCor,t1,t2,t3,t4){const T=$('tela');T.className=cls;$('ic').textContent=ic;$('ic').style.color=icCor;$('t1').textContent=t1;$('t2').textContent=t2;$('t3').textContent=t3||'';$('t4').textContent=t4||''}
+
+function processar(raw){
+ raw=String(raw||'').trim();if(!raw)return;
+ const id=normId(raw);
+ if(!id){mostrar('inv','!','#5b6b7a','LEITURA INVÁLIDA','bipe o código do pacote','');bipe(220,.25);return}
+ bip++;$('cB').textContent=bip;enviar(raw);
+ const it=lista.get(id);
+ if(it&&(achadosAqui.has(id)||it.achado)){mostrar('ja','✓','#0f7a51','JÁ ACHADO','este faltante já foi bipado',it.g,id);bipe(660,.15);addHist(id,'Já achado','a');return}
+ if(it){achadosAqui.add(id);ach++;$('cA').textContent=ach;
+  let resta=0;for(const [k,v] of lista)if(v.g===it.g&&!v.achado&&!achadosAqui.has(k))resta++;
+  mostrar('achou','✓','#12a150','ACHOU!','separe este pacote',it.g,resta?('faltam '+resta+' nessa gaiola'):'gaiola auditada ✓');
+  bipe(1200,.12);setTimeout(()=>bipe(1600,.18),140);if(navigator.vibrate)navigator.vibrate([80,60,80]);addHist(id,'ACHOU · '+it.g,'a');return}
+ mostrar('nao','✗','#c75f00','NÃO É ESTE','pode bipar o próximo','',id);bipe(300,.18);addHist(id,'não é faltante','n')}
+
+function addHist(id,txt,c){hist.unshift({id,txt,c});hist=hist.slice(0,8);$('hist').innerHTML=hist.map(h=>'<div class="'+h.c+'"><span>'+h.id+'</span><span>'+h.txt+'</span></div>').join('')}
+
+// o leitor do HH digita o código no campo; sem Enter, a leitura termina quando para de chegar caractere
+const campo=$('campo');let tm=null;
+function finalizar(){clearTimeout(tm);const v=campo.value;campo.value='';processar(v)}
+campo.addEventListener('input',()=>{clearTimeout(tm);tm=setTimeout(finalizar,180)});
+campo.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();finalizar()}});
+function foco(){if(document.activeElement!==campo)campo.focus()}
+document.addEventListener('click',foco);setInterval(foco,800);
+window.addEventListener('online',enviarFila);
+carregar();setInterval(carregar,30000);setInterval(enviarFila,5000);foco();
+</script>
 </body>
 </html>
