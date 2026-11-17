@@ -504,17 +504,23 @@ $('syncBtn').onclick=()=>cloudLoad(true);
 // pacotes achados pelo HH: lidos da planilha "Stage Zone – Robô" (aba Faltantes nas gaiolas)
 const ROBO_SHEET='1Cp4Gm2kx5ebcnz3Q5CpqcAH2OOvAC1cxYCgbuvpIIyU',ROBO_ABA='Faltantes nas gaiolas';
 // lê a planilha via gviz JSONP (funciona entre sites; o fetch de CSV é bloqueado pelo navegador)
-function gvizRows(){return new Promise((res,rej)=>{const cb='__gv'+Date.now()+Math.floor(Math.random()*1e4),sc=document.createElement('script');
+function gvizRows(aba){return new Promise((res,rej)=>{const cb='__gv'+Date.now()+Math.floor(Math.random()*1e4),sc=document.createElement('script');
  const fim=()=>{clearTimeout(t);try{delete window[cb]}catch(e){window[cb]=undefined}sc.remove()},t=setTimeout(()=>{fim();rej('timeout')},20000);
- window[cb]=d=>{fim();try{if(d.status==='error')return rej(d.errors);const cols=d.table.cols.map(c=>c.label||'');res([cols].concat(d.table.rows.map(r=>(r.c||[]).map(c=>c==null?'':String(c.f!=null&&typeof c.v!=='string'?c.f:(c.v==null?'':c.v))))))}catch(e){rej(e)}};
+ window[cb]=d=>{fim();try{if(d.status==='error')return rej(d.errors);const cols=d.table.cols.map(c=>c.label||'');res([cols].concat(d.table.rows.map(r=>(r.c||[]).map(c=>c==null?'':String(c.f!=null?c.f:(c.v==null?'':c.v))))))}catch(e){rej(e)}};
  sc.onerror=()=>{fim();rej('erro')};
- sc.src='https://docs.google.com/spreadsheets/d/'+ROBO_SHEET+'/gviz/tq?tqx=out:json;responseHandler:'+cb+'&headers=1&sheet='+encodeURIComponent(ROBO_ABA)+'&_='+Date.now();
+ sc.src='https://docs.google.com/spreadsheets/d/'+ROBO_SHEET+'/gviz/tq?tqx=out:json;responseHandler:'+cb+'&headers=1&sheet='+encodeURIComponent(aba)+'&_='+Date.now();
  document.head.appendChild(sc)})}
+let hhBusy=false;
 async function hhLoad(){
- try{let rows=await gvizRows(),m=new Map(),au=new Set();
-  for(const x of rows.slice(1)){const id=normId(x[1]),g=normCage(x[0])||x[0];if(id&&/✅|achado/i.test(x[3]||''))m.set(id,{g,h:hora(x[4]||'')});if(/sim/i.test(x[6]||''))au.add(g)}
-  const sig=[...m.keys()].join(',')+'|'+[...au].join(',');if(sig!==hhSig){hhSig=sig;hh=m;hhAud=au;render()}}catch(e){console.log('[robo] leitura da planilha falhou',e)}}
-setInterval(hhLoad,10000);
+ if(hhBusy)return;hhBusy=true;
+ try{const [ro,bi]=await Promise.allSettled([gvizRows(ROBO_ABA),gvizRows('Bipagem HH')]);let m=new Map(),au=new Set(),ok=false;
+  // 1) direto da aba Bipagem HH (o AppSheet grava na hora) — o app faz a conta sozinho, sem esperar o robô
+  if(bi.status==='fulfilled'){ok=true;for(const x of bi.value.slice(1)){const id=normId(x[1]),p=id&&place.get(id);if(!p)continue;au.add(p.g);if(falt.has(id)&&!m.has(id))m.set(id,{g:p.g,h:hora(x[0]||'')})}}
+  // 2) o que o robô já processou (garante leituras que a aba crua não trouxe)
+  if(ro.status==='fulfilled'){ok=true;for(const x of ro.value.slice(1)){const id=normId(x[1]),g=normCage(x[0])||x[0];if(id&&/✅|achado/i.test(x[3]||'')&&!m.has(id))m.set(id,{g,h:hora(x[4]||'')});if(/sim/i.test(x[6]||''))au.add(g)}}
+  if(!ok)return;
+  const sig=falt.size+'|'+place.size+'|'+[...m.keys()].join(',')+'|'+[...au].join(',');if(sig!==hhSig){hhSig=sig;hh=m;hhAud=au;render()}}catch(e){console.log('[robo] leitura da planilha falhou',e)}finally{hhBusy=false}}
+setInterval(hhLoad,5000);
 render();
 cloudLoad(false).then(hhLoad);
 </script>
