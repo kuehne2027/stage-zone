@@ -3,7 +3,7 @@
  *
  * Abas que o robô usa (ele cria sozinho em "Instalar robô"):
  *   • Bipagem HH        → o AppSheet do HH grava aqui (coluna A = data/hora, B = ID lido)
- *   • Colar Faltantes   → importe aqui o CSV de faltantes baixado do sistema
+ *   • Colar Faltantes   → faltantes (vêm sozinhos do app Stage Zone; ou importe o CSV aqui)
  *   • Painel            → endereços com faltantes, diminuindo a cada pacote achado
  *   • Faltantes nas gaiolas → lista de cada ID faltante, endereço e situação (o app Stage Zone lê esta aba)
  *   • Stage Zone        → bipagens das gaiolas (puxadas da nuvem do app Stage Zone)
@@ -91,9 +91,7 @@ function puxarStageMenu() {
 function zerarBipagens() {
   const ui = SpreadsheetApp.getUi();
   if (ui.alert('Zerar bipagens', 'Apagar todas as bipagens do HH e começar um ciclo novo?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
-  const bip = aba_(ABA.BIP);
-  if (bip.getLastRow() > 1) bip.getRange(2, 1, bip.getLastRow() - 1, bip.getMaxColumns()).clearContent().setBackground(null).setFontColor(null);
-  PropertiesService.getDocumentProperties().deleteProperty('ultimaLinha');
+  zerarSemPerguntar_();
   robo(true);
 }
 
@@ -104,6 +102,8 @@ function robo(forcar) {
   if (!lock.tryLock(20000)) return;
   try {
     const props = PropertiesService.getDocumentProperties();
+    // puxa da nuvem (app Stage Zone) faltantes e Stage Zone novos; Stage Zone de outra data zera as bipagens
+    try { if (sincronizarNuvem_()) forcar = true; } catch (e) { console.log('Nuvem: ' + e.message); }
     const bip = aba_(ABA.BIP);
     const ultima = bip.getLastRow();
     const feita = Number(props.getProperty('ultimaLinha') || 1);
@@ -320,6 +320,54 @@ function lista_(B, achados) {
   }
   limparSobra_(sh, rows.length + 1, 7);
   sh.setFrozenRows(1); sh.setColumnWidths(1, 7, 140);
+}
+
+/* ======================= SINCRONIA COM O APP (nuvem) ======================= */
+// O app Stage Zone salva na nuvem a Stage Zone (linha 'atual') e os faltantes (linha 'faltantes').
+// A cada minuto o robô confere só a data de atualização; se mudou, puxa e atualiza a planilha.
+function sincronizarNuvem_() {
+  const props = PropertiesService.getDocumentProperties();
+  const r = UrlFetchApp.fetch(SB_URL + '?id=in.(atual,faltantes)&select=id,data_ref,atualizado_em', {
+    headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }, muteHttpExceptions: true
+  });
+  if (r.getResponseCode() !== 200) return false;
+  const rows = JSON.parse(r.getContentText());
+  let mudou = false;
+  const st = rows.find(x => x.id === 'atual'), fa = rows.find(x => x.id === 'faltantes');
+  if (st && st.atualizado_em !== props.getProperty('nuvemStage')) {
+    const dataAntes = props.getProperty('dataRef');
+    puxarStage_();
+    props.setProperty('nuvemStage', st.atualizado_em);
+    if (dataAntes && String(st.data_ref) !== dataAntes) zerarSemPerguntar_();   // novo dia → bipagens de ontem saem
+    mudou = true;
+  }
+  if (fa && fa.atualizado_em !== props.getProperty('nuvemFalt')) {
+    puxarFaltantes_();
+    props.setProperty('nuvemFalt', fa.atualizado_em);
+    mudou = true;
+  }
+  return mudou;
+}
+
+function puxarFaltantes_() {
+  const r = UrlFetchApp.fetch(SB_URL + '?id=eq.faltantes&select=payload', {
+    headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }, muteHttpExceptions: true
+  });
+  if (r.getResponseCode() !== 200) throw new Error('HTTP ' + r.getResponseCode());
+  const row = JSON.parse(r.getContentText())[0];
+  if (!row) return 0;
+  const rows = String(row.payload || '').split('\n').filter(Boolean).map(l => { const p = l.split('\t'); return [p[0], p[1] || '']; });
+  const sh = aba_(ABA.COLAR);
+  sh.clearContents();
+  sh.getRange(1, 1, 1, 2).setValues([['ID do pacote', 'N.º Rota']]);
+  if (rows.length) { sh.getRange(2, 1, rows.length, 1).setNumberFormat('@'); sh.getRange(2, 1, rows.length, 2).setValues(rows); }
+  return rows.length;
+}
+
+function zerarSemPerguntar_() {
+  const bip = aba_(ABA.BIP);
+  if (bip.getLastRow() > 1) bip.getRange(2, 1, bip.getLastRow() - 1, bip.getMaxColumns()).clearContent().setBackground(null).setFontColor(null);
+  PropertiesService.getDocumentProperties().deleteProperty('ultimaLinha');
 }
 
 /* ======================= STAGE ZONE (nuvem) ======================= */
